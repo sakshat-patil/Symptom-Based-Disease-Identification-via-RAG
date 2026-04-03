@@ -25,11 +25,15 @@ env/
 .DS_Store
 Thumbs.db
 
-# Data files (large)
+# Raw data — too large or requires separate download
+data/raw/MedQuAD/
 data/raw/*.json
 data/raw/*.ndjson
-*.csv
-!data/.gitkeep
+data/raw/passages.jsonl
+data/raw/disease-symptom-description-dataset.zip
+
+# Kaggle credentials
+.kaggle/
 
 # Model artifacts
 *.faiss

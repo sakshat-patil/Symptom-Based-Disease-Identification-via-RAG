@@ -1,139 +1,175 @@
-# Record-Based Medical Diagnostic Assistant
+# Symptom-Based Disease Identification via Hybrid FP-Growth + RAG
 
-A hybrid diagnostic assistant that integrates **Frequent Pattern Mining** with **Retrieval-Augmented Generation (RAG)** to suggest accurate diagnoses based on patient symptom clusters, backed by peer-reviewed medical evidence.
+A hybrid diagnostic system that fuses **FP-Growth association rule mining** with **dense retrieval (RAG)** to rank likely diagnoses from a patient's symptom set — backed by biomedical literature.
 
-> **Course Project** — San José State University  
-> **Team:** Sakshat Nandkumar Patil, Vineet Kumar, Aishwarya Madhave
+> **Course:** CS 226 Data Mining — San José State University, Spring 2026  
+> **Team:** Sakshat Nandkumar Patil · Vineet Kumar · Aishwarya Madhave
 
 ---
 
-## Overview
+## Results
 
-Clinicians face significant cognitive load when synthesizing patient symptoms with the ever-expanding body of medical literature. This system addresses that gap by combining two complementary approaches:
+Ablation study across 200 synthetic test cases, 41 diseases:
 
-1. **FP-Growth Mining** on synthetic EHR data (Synthea) to extract high-confidence symptom→disease association rules as statistical priors.
-2. **Dense Retrieval (RAG)** over a biomedical corpus (MedQuAD + PubMed Central) to fetch relevant medical literature for evidence grounding.
-3. **Hybrid Fusion Reranking** that merges retrieval similarity scores with mined association confidence to produce a final ranked diagnostic output.
+| Mode | Recall@1 | Recall@5 | Recall@10 | MRR |
+|------|----------|----------|-----------|-----|
+| Retrieval-only | 7.5% | 23.5% | 38.5% | 0.144 |
+| **Mining-only** | **56.0%** | **88.5%** | **92.5%** | **0.587** |
+| Fused (α=0.6) | 54.0% | 93.5% | **99.0%** | 0.592 |
+
+**Key finding:** Retrieval collapsed to 7.5% Recall@1 due to a vocabulary mismatch — the MedQuAD corpus uses clinical terminology (e.g. *myalgia*) while the Kaggle test cases use snake_case identifiers (e.g. `muscle_pain`). The FP-Growth rules, derived from the same vocabulary as the test set, were unaffected and drove strong performance. Fused scoring recovers at Recall@10 (99%) because retrieval still adds marginal signal at wider cutoffs, but lowering α (retrieval weight) would help Recall@1.
+
+This finding motivates using domain-specific embeddings such as PubMedBERT that are trained on clinical vocabulary and can bridge the terminology gap.
+
+---
 
 ## Architecture
 
 ```
-User Query (symptoms)
+Patient Symptoms (query)
         │
-        ├──► FP-Growth Rule Lookup ──► Mining Confidence Score
+        ├──► FP-Growth Rule Lookup
+        │         └── match symptom subsets → (disease, confidence, lift)
         │
-        ├──► PubMedBERT Encoder ──► FAISS Retrieval ──► Retrieval Similarity Score
+        ├──► Sentence-Transformer Encoder
+        │         └── FAISS flat-IP index over MedQuAD passages
+        │                   └── top-K passages → retrieval similarity score
         │
         └──► Hybrid Fusion Reranker
-                    │
-                    ▼
-        Ranked Diagnoses + Supporting Citations
+                  FusedScore = α × RetrievalSim + (1−α) × MiningConf
+                  (default α = 0.6)
+                        │
+                        ▼
+             Ranked disease list + supporting citations
 ```
+
+---
 
 ## Project Structure
 
 ```
+Code/
 ├── README.md
 ├── requirements.txt
 ├── src/
-│   ├── synthea_etl.py            # ETL pipeline for Synthea FHIR data
-│   ├── fp_growth_mining.py       # Association rule mining module
-│   ├── medquad_preprocessor.py   # MedQuAD corpus cleaning and chunking
-│   ├── embedding_index.py        # PubMedBERT embedding + FAISS index (WIP)
-│   ├── retrieval.py              # Dense retrieval pipeline (WIP)
-│   └── fusion_reranker.py        # Hybrid reranking fusion (WIP)
+│   ├── etl.py                  # Ingest Synthea FHIR, Kaggle CSV, or synthetic data → transactions.csv
+│   ├── mining.py               # FP-Growth frequent itemset mining → association_rules.csv
+│   ├── retrieval.py            # Sentence-transformer encoder + FAISS dense retriever
+│   ├── fusion_reranker.py      # Hybrid fusion: α·retrieval + (1−α)·mining confidence
+│   ├── evaluation.py           # Recall@K, Precision@K, F1@K, MRR, ablation runner
+│   ├── run_experiment.py       # End-to-end experiment pipeline
+│   ├── medquad_preprocessor.py # MedQuAD XML → chunked JSONL passages
+│   └── config.py               # Shared paths and hyperparameters
 ├── data/
-│   ├── raw/                      # Raw Synthea JSON + MedQuAD XML (not committed)
-│   ├── processed/                # Cleaned CSVs, JSONL chunks
-│   └── rules/                    # Mined association rules
+│   ├── raw/                    # Source data (not committed — see Data Setup below)
+│   ├── processed/
+│   │   ├── transactions.csv    # 4,920 records × 41 diseases (Kaggle)
+│   │   └── association_rules.csv  # 508 mined rules (support≥0.01, conf≥0.5)
+│   └── results/
+│       ├── ablation_summary.csv   # Per-mode metrics
+│       └── experiment_results.csv # Per-case results
 ├── notebooks/
-│   └── exploratory_analysis.ipynb
-├── docs/
-│   └── Project_CheckIn_Report.pdf
-└── .gitignore
+└── docs/
 ```
 
-## Getting Started
+---
 
-### Prerequisites
+## Setup
 
-- Python 3.9+
-- [Synthea](https://github.com/synthetichealth/synthea) (for generating EHR data)
-- [MedQuAD](https://github.com/abachaa/MedQuAD) (clone into `data/raw/MedQuAD`)
-
-### Installation
+### 1. Install dependencies
 
 ```bash
-git clone https://github.com/<your-username>/medical-diagnostic-assistant.git
-cd medical-diagnostic-assistant
 pip install -r requirements.txt
 ```
 
-### Requirements
+### 2. Get the data
 
-```
-pandas
-mlxtend
-lxml
-scikit-learn
-transformers
-faiss-cpu
-torch
-```
-
-## Usage
-
-### 1. Generate and process Synthea data
+**Option A — Kaggle dataset (recommended, free)**
 
 ```bash
-# Generate synthetic patients (run Synthea separately first)
-# Then parse FHIR JSON into transaction tables:
-python src/synthea_etl.py --input_dir ./data/raw/synthea_fhir --output_dir ./data/processed
+pip install kaggle
+# Place your kaggle.json in ~/.kaggle/
+kaggle datasets download -d itachi9604/disease-symptom-description-dataset -p data/raw
+unzip data/raw/disease-symptom-description-dataset.zip -d data/raw
 ```
 
-This produces `transactions.csv` and `symptom_baskets.csv` in the output directory.
+**Option B — Synthea synthetic EHR**
 
-### 2. Run FP-Growth mining
+Download [Synthea](https://github.com/synthetichealth/synthea), generate patients, place FHIR bundles in `data/raw/`.
+
+**MedQuAD corpus (for retrieval)**
 
 ```bash
-python src/fp_growth_mining.py --input ./data/processed/symptom_baskets.csv \
-                               --output ./data/rules/association_rules.csv \
-                               --min_support 0.01 --min_confidence 0.5
+git clone https://github.com/abachaa/MedQuAD data/raw/MedQuAD
 ```
 
-Outputs a CSV of symptom→disease association rules ranked by confidence and lift.
-
-### 3. Preprocess MedQuAD corpus
+### 3. Run the pipeline
 
 ```bash
-python src/medquad_preprocessor.py --input_dir ./data/raw/MedQuAD \
-                                   --output ./data/processed/medquad_chunks.jsonl \
-                                   --chunk_size 256 --chunk_overlap 64
+# Step 1 — ETL: raw data → transactions
+python src/etl.py --source kaggle --csv data/raw/dataset.csv
+
+# Step 2 — Mine association rules (raise --min_support if OOM)
+python src/mining.py --min_support 0.03 --min_confidence 0.5
+
+# Step 3 — Preprocess MedQuAD for retrieval
+python src/medquad_preprocessor.py
+
+# Step 4 — Run full experiment + ablation
+python src/run_experiment.py --rules data/processed/association_rules.csv \
+    --corpus data/raw/passages.jsonl --n_cases 200 --alpha 0.6
 ```
 
-Produces a JSONL file of overlapping text passages ready for vector embedding.
+Results are written to `data/results/`.
 
-## Evaluation Plan
+---
 
-| Metric | Component | Target |
-|--------|-----------|--------|
-| Recall@K (K=5,10,20) | Retrieval | ≥ 0.75 |
-| MRR | Retrieval | ≥ 0.60 |
-| Precision@K | Diagnostic accuracy | ≥ 0.70 |
-| F1-Score | Top-1 diagnosis | ≥ 0.65 |
-| Latency | End-to-end | < 3 sec |
+## Module Overview
 
-An ablation study comparing retrieval-only, mining-only, and fused approaches is planned.
+### `etl.py`
+Ingests three source types in order of preference: Synthea FHIR JSON → Kaggle wide-format CSV → built-in synthetic fallback. Outputs `transactions.csv` with columns `patient_id | condition | symptoms` (pipe-separated symptom list per row).
+
+### `mining.py`
+Runs [mlxtend](https://rasbt.github.io/mlxtend/) FP-Growth on the one-hot transaction matrix. Each row is a (symptom₁, …, symptomₙ, DX:disease) basket. Filters rules to those with a single disease consequent and no disease in the antecedent. Outputs `association_rules.csv` with `symptom_set | disease | support | confidence | lift`.
+
+> **Memory note:** The one-hot matrix can be large. If you hit OOM, use `--min_support 0.03` instead of the default `0.01`.
+
+### `retrieval.py`
+Encodes a corpus of MedQuAD passages using a sentence-transformer model (default: `all-MiniLM-L6-v2`) and stores them in a FAISS flat inner-product index (cosine similarity after L2 normalisation). Falls back to a 20-passage demo corpus when no JSONL file is provided.
+
+### `fusion_reranker.py`
+Combines per-disease signals:
+- **Mining score** — maximum confidence across all rules whose antecedent is a subset of the query symptoms
+- **Retrieval score** — cosine similarity of the closest passage mentioning each disease
+- **Fused** = α × retrieval + (1−α) × mining (default α = 0.6)
+
+### `evaluation.py`
+Generates synthetic test cases from the transaction table, runs the full pipeline per case, and computes Recall@K, Precision@K, F1@K, and MRR for K ∈ {1, 3, 5, 10}. Also runs the three-way ablation (retrieval-only / mining-only / fused).
+
+---
+
+## Discussion
+
+### Why did retrieval underperform?
+The MedQuAD corpus describes symptoms in clinical prose ("myalgia", "pyrexia") while the Kaggle dataset uses normalised snake_case tokens (`muscle_pain`, `high_fever`). A general-purpose sentence encoder cannot bridge this gap because the surface forms are too different. Solutions include:
+- Using **PubMedBERT** or **BioSentBERT** embeddings trained on biomedical text
+- Adding a **synonym expansion** step (UMLS / MeSH) to the query before encoding
+- Replacing MedQuAD with a corpus that uses the same vocabulary as the training data
+
+### Why does fused beat mining at Recall@10?
+At Recall@10 the fused model reaches 99% vs 92.5% for mining-only. Even noisy retrieval signal is enough to pull the true disease into the top-10 when it was just outside mining's coverage. Lowering α (e.g. α=0.3) would likely improve Recall@1 as well.
+
+---
 
 ## References
 
-1. Walonoski et al. (2018). *Synthea: An approach, method, and software for generating synthetic patients and the synthetic electronic health care record.* JAMIA.
+1. Walonoski et al. (2018). *Synthea: An approach, method, and software for generating synthetic patients.* JAMIA.
 2. Lewis et al. (2020). *Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks.* NeurIPS.
 3. Ben Abacha & Demner-Fushman (2019). *A Question-Entailment Approach to Question Answering.* BMC Bioinformatics.
 4. Han et al. (2000). *Mining Frequent Patterns without Candidate Generation.* ACM SIGMOD.
-5. Lee et al. (2020). *BioBERT: A pre-trained biomedical language representation model.* Bioinformatics.
-6. Gu et al. (2021). *Domain-Specific Language Model Pretraining for Biomedical NLP.* ACM TOCH.
+5. Gu et al. (2021). *Domain-Specific Language Model Pretraining for Biomedical NLP.* ACM TOCH.
+6. Reimers & Gurevych (2019). *Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks.* EMNLP.
 
-## License
+---
 
-This project is for academic purposes only. Not intended for clinical use.
+*Academic project only — not intended for clinical use.*
