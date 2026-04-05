@@ -1,15 +1,10 @@
 """Dense retrieval over MedQuAD with FAISS IndexFlatIP.
 
-Inner-product on L2-normalised vectors == cosine sim. The heavy work is
-encoding the 24k passages once and caching the matrix and index to disk;
-everything after that is millisecond-scale.
-
-Query path:
-    1. Build a natural-language version of the symptom list.
-    2. Encode and ask FAISS for the top-K passages.
-    3. Map each passage to one of the 41 Kaggle diseases via
-       disease_keywords.diseases_matching.
-    4. Aggregate to per-disease scores by max() of passage similarities.
+Now with optional clinical-synonym expansion at query time. See
+synonym_expansion.SYMPTOM_SYNONYMS — the expansion appends formal
+clinical terms to the natural-language probe before encoding, which
+closes part of the Kaggle/MedQuAD vocabulary gap without re-embedding
+the corpus.
 
 Owner: Vineet.
 """
@@ -27,6 +22,7 @@ import numpy as np
 
 from .disease_keywords import diseases_matching
 from .embedding_backends import Backend, get_backend
+from .synonym_expansion import expand_query_string
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PASSAGES = ROOT / "data" / "processed" / "passages.jsonl"
@@ -74,6 +70,16 @@ def load_or_build(backend: Backend, passages: list[dict],
     return idx
 
 
+def _candidate_diseases_from_passage(p: dict, universe: set[str]) -> list[str]:
+    """Match a passage to the disease universe via curated keywords. Focus
+    first (highest precision), then question. Don't fall back to text — the
+    "What is Chest Pain?"-style articles inflate scores otherwise."""
+    cands = diseases_matching(p.get("focus", ""), universe)
+    if cands:
+        return cands
+    return diseases_matching(p.get("question", ""), universe)
+
+
 @dataclass
 class DenseRetriever:
     backend: Backend
@@ -90,9 +96,12 @@ class DenseRetriever:
         return cls(backend=backend, passages=passages, index=index,
                    disease_universe=set(diseases))
 
-    def retrieve(self, symptoms: list[str], top_k: int = 30
+    def retrieve(self, symptoms: list[str], top_k: int = 30,
+                 expand_synonyms: bool = False
                   ) -> tuple[dict[str, float], dict[str, list[dict]]]:
         query = "symptoms: " + ", ".join(s.replace("_", " ") for s in symptoms)
+        if expand_synonyms:
+            query = expand_query_string(query, symptoms)
         q = self.backend.encode([query])
         scores, ids = self.index.search(q, top_k)
         per_disease_score: dict[str, float] = {}
@@ -101,10 +110,9 @@ class DenseRetriever:
             if i < 0:
                 continue
             p = self.passages[i]
-            cands = diseases_matching(p.get("focus", ""), self.disease_universe)
+            cands = _candidate_diseases_from_passage(p, self.disease_universe)
             if not cands:
-                cands = diseases_matching(p.get("question", ""),
-                                            self.disease_universe)
+                continue
             for d in cands:
                 if s > per_disease_score.get(d, -1.0):
                     per_disease_score[d] = float(s)
