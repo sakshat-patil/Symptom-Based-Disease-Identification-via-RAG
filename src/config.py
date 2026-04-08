@@ -16,5 +16,7 @@ CHUNK_SIZE = 256  # tokens per passage
 TOP_K = 10  # number of retrieved passages
 
 # FP-Growth settings
-MIN_SUPPORT = 0.01
+# min_support lowered from 0.01 to 0.005 after Check-in 3 showed only
+# 20/41 diseases were covered at the higher threshold.
+MIN_SUPPORT = 0.005
 MIN_CONFIDENCE = 0.5

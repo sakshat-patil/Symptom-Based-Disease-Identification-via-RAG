@@ -87,7 +87,7 @@ def build_item_matrix(transactions_df: pd.DataFrame) -> tuple[pd.DataFrame, list
 
 def run_fpgrowth(
     transactions_df: pd.DataFrame,
-    min_support: float = 0.01,
+    min_support: float = 0.005,
 ) -> pd.DataFrame:
     """Run FP-Growth on the transaction table.
 
@@ -189,7 +189,7 @@ def generate_association_rules(
 
 def run_mining(
     transactions_path: str | Path = "data/processed/transactions.csv",
-    min_support: float = 0.01,
+    min_support: float = 0.005,
     min_confidence: float = 0.5,
     min_lift: float = 1.0,
     out_path: str | Path = "data/processed/association_rules.csv",
@@ -249,7 +249,9 @@ def _parse_args():
     parser = argparse.ArgumentParser(description="FP-Growth association rule mining.")
     parser.add_argument("--transactions", default="data/processed/transactions.csv",
                         help="Input transaction table CSV.")
-    parser.add_argument("--min_support",    type=float, default=0.01)
+    parser.add_argument("--min_support",    type=float, default=0.005,
+                        help="Minimum support threshold (lowered from 0.01 to improve "
+                             "rule coverage across the 21 previously uncovered diseases).")
     parser.add_argument("--min_confidence", type=float, default=0.5)
     parser.add_argument("--min_lift",       type=float, default=1.0)
     parser.add_argument("--out", default="data/processed/association_rules.csv",
