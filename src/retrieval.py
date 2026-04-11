@@ -252,7 +252,7 @@ class DenseRetriever:
     # Core retrieval method
     # ------------------------------------------------------------------
 
-    def retrieve(self, query: str, top_k: int = 10) -> list[dict]:
+    def retrieve(self, query: str, top_k: int = 10, expand_synonyms: bool = False) -> list[dict]:
         """Encode *query* and return the *top_k* most similar passages.
 
         Parameters
@@ -261,6 +261,11 @@ class DenseRetriever:
             Free-text symptom description.
         top_k:
             Number of results to return.
+        expand_synonyms:
+            If True, run the query through ``synonym_expansion.expand_query``
+            before encoding. This translates snake_case Kaggle tokens (e.g.
+            ``muscle_pain``) into their clinical equivalents (``myalgia``)
+            so the encoder has a better chance of matching MedQuAD prose.
 
         Returns
         -------
@@ -269,6 +274,12 @@ class DenseRetriever:
             ``{"rank": int, "score": float, "text": str, "disease": str|None}``
         """
         top_k = min(top_k, self.index.ntotal)
+        if expand_synonyms:
+            try:
+                from src.synonym_expansion import expand_query_string
+                query = expand_query_string(query)
+            except Exception as exc:  # pragma: no cover — optional dep
+                print(f"[retrieval] synonym expansion skipped: {exc}")
         q_vec = encode_query(query)
         scores, indices = self.index.search(q_vec, top_k)
 
@@ -367,6 +378,12 @@ def _parse_args():
         default=10,
         help="Number of passages to retrieve.",
     )
+    parser.add_argument(
+        "--expand_synonyms",
+        action="store_true",
+        help="Expand the query with clinical synonyms before encoding "
+             "(bridges Kaggle snake_case tokens to MedQuAD clinical prose).",
+    )
     return parser.parse_args()
 
 
@@ -389,7 +406,11 @@ if __name__ == "__main__":
     print(f"\nQuery: \"{args.query}\"")
     print(f"Retrieving top-{args.top_k} passages …\n")
 
-    results = retriever.retrieve(args.query, top_k=args.top_k)
+    results = retriever.retrieve(
+        args.query,
+        top_k=args.top_k,
+        expand_synonyms=args.expand_synonyms,
+    )
 
     print(f"{'Rank':<5} {'Score':<8} {'Disease':<30} {'Passage (truncated)'}")
     print("-" * 90)
