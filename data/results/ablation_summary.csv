@@ -1,0 +1,10 @@
+variant,mode,recall@1,recall@3,recall@5,recall@10,mrr
+(mining-only),mining-only,0.79,0.87,0.87,0.87,0.8291666666666666
+minilm,retrieval-only,0.13,0.175,0.18,0.18,0.15125
+minilm,fused(a=0.3),0.825,0.89,0.89,0.89,0.8566666666666666
+minilm+syn,retrieval-only,0.14,0.225,0.225,0.225,0.18166666666666667
+minilm+syn,fused(a=0.3),0.82,0.895,0.895,0.895,0.8566666666666666
+pubmedbert,retrieval-only,0.15,0.225,0.225,0.225,0.1875
+pubmedbert,fused(a=0.3),0.815,0.87,0.87,0.87,0.8408333333333333
+pubmedbert+syn,retrieval-only,0.13,0.265,0.265,0.265,0.19416666666666668
+pubmedbert+syn,fused(a=0.3),0.815,0.875,0.875,0.875,0.8433333333333333
