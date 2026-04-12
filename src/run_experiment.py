@@ -36,7 +36,7 @@ def _parse_args():
     parser.add_argument("--rules",   default=None,             help="Association rules CSV (falls back to demo rules).")
     parser.add_argument("--index",   default=None,             help="Pre-built FAISS index path to load/save.")
     parser.add_argument("--n_cases", type=int,   default=200,  help="Number of synthetic test cases.")
-    parser.add_argument("--alpha",   type=float, default=0.6,  help="Fusion weight for retrieval score.")
+    parser.add_argument("--alpha",   type=float, default=0.3,  help="Fusion weight for retrieval score (picked from alpha_sweep.csv).")
     parser.add_argument("--top_k",   type=int,   default=10,   help="Retrieval and ranking cut-off.")
     parser.add_argument("--out_dir", default="data/results",   help="Output directory for CSV files.")
     parser.add_argument("--seed",    type=int,   default=42,   help="Random seed for synthetic data.")

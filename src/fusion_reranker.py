@@ -173,7 +173,7 @@ def fuse_and_rank(
     query_symptoms: str | list[str],
     retrieval_results: list[dict],
     rules_df: pd.DataFrame,
-    alpha: float = 0.6,
+    alpha: float = 0.3,
     top_k: int = 10,
 ) -> list[dict]:
     """Compute fused scores for each candidate disease and return ranked list.
@@ -240,7 +240,18 @@ def fuse_and_rank(
             "supporting_passages": disease_passages.get(disease, []),
         })
 
-    rows.sort(key=lambda x: x["fused_score"], reverse=True)
+    # Sort by fused_score (primary) with deterministic tie-breakers:
+    #   1. Higher mining_confidence (precision-first for exact rule match)
+    #   2. Higher retrieval_score
+    #   3. Disease name alphabetically (stable output for regression tests)
+    rows.sort(
+        key=lambda x: (
+            -x["fused_score"],
+            -x["mining_confidence"],
+            -x["retrieval_score"],
+            x["disease"],
+        )
+    )
     for i, row in enumerate(rows[:top_k], start=1):
         row["rank"] = i
 
@@ -262,7 +273,7 @@ class FusionReranker:
         Default interpolation weight.
     """
 
-    def __init__(self, rules_path: str | Path | None = None, alpha: float = 0.6):
+    def __init__(self, rules_path: str | Path | None = None, alpha: float = 0.3):
         self.rules_df = load_rules(rules_path)
         self.alpha = alpha
 
@@ -305,8 +316,9 @@ def _parse_args():
     parser.add_argument(
         "--alpha",
         type=float,
-        default=0.6,
-        help="Retrieval weight (0–1). Default 0.6.",
+        default=0.3,
+        help="Retrieval weight (0–1). Default 0.3 — picked by alpha_sweep.py "
+             "after Check-in 3 found the old 0.6 default hurt Recall@1.",
     )
     parser.add_argument(
         "--top_k",
