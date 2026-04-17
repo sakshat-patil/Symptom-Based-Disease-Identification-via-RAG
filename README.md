@@ -9,17 +9,31 @@ A hybrid diagnostic system that fuses **FP-Growth association rule mining** with
 
 ## Results
 
-Ablation study across 200 synthetic test cases, 41 diseases:
+Ablation study across 200 synthetic test cases, 41 diseases (Check-in 4 update):
 
 | Mode | Recall@1 | Recall@5 | Recall@10 | MRR |
 |------|----------|----------|-----------|-----|
-| Retrieval-only | 7.5% | 23.5% | 38.5% | 0.144 |
-| **Mining-only** | **56.0%** | **88.5%** | **92.5%** | **0.587** |
-| Fused (α=0.6) | 54.0% | 93.5% | **99.0%** | 0.592 |
+| Retrieval-only (α = 1.0) | 7.5% | 23.5% | 38.5% | 0.144 |
+| Mining-only (α = 0.0) | 56.0% | 88.5% | 92.5% | 0.587 |
+| Fused (α = 0.6, prior) | 54.0% | 93.5% | 99.0% | 0.592 |
+| **Fused (α = 0.3, new default)** | **59.5%** | **92.5%** | **97.5%** | **0.624** |
 
-**Key finding:** Retrieval collapsed to 7.5% Recall@1 due to a vocabulary mismatch — the MedQuAD corpus uses clinical terminology (e.g. *myalgia*) while the Kaggle test cases use snake_case identifiers (e.g. `muscle_pain`). The FP-Growth rules, derived from the same vocabulary as the test set, were unaffected and drove strong performance. Fused scoring recovers at Recall@10 (99%) because retrieval still adds marginal signal at wider cutoffs, but lowering α (retrieval weight) would help Recall@1.
+The `alpha_sweep.py` grid shows α = 0.3 is the Recall@1 and MRR peak.
+Rule coverage also expanded from 20/41 to 33/41 diseases after lowering
+`min_support` from 0.01 to 0.005 (969 rules vs 508).
 
-This finding motivates using domain-specific embeddings such as PubMedBERT that are trained on clinical vocabulary and can bridge the terminology gap.
+**Key finding:** Retrieval-only Recall@1 remains low (7.5%) because of a
+vocabulary mismatch — the MedQuAD corpus uses clinical terminology (e.g.
+*myalgia*) while the Kaggle test cases use snake_case identifiers (e.g.
+`muscle_pain`). The FP-Growth rules, derived from the same vocabulary as
+the test set, drive most of the accuracy. The new `synonym_expansion`
+module and PubMedBERT embedding backend are two in-flight mitigations.
+Fused scoring still wins at Recall@10 (97.5% at α = 0.3) because
+retrieval adds marginal signal at wider cut-offs.
+
+This finding motivates using domain-specific embeddings such as PubMedBERT
+and an automated UMLS/MeSH synonym step so the retrieval component can
+finally start pulling its weight at Recall@1.
 
 ---
 
@@ -58,18 +72,24 @@ Code/
 │   ├── fusion_reranker.py      # Hybrid fusion: α·retrieval + (1−α)·mining confidence
 │   ├── evaluation.py           # Recall@K, Precision@K, F1@K, MRR, ablation runner
 │   ├── run_experiment.py       # End-to-end experiment pipeline
+│   ├── alpha_sweep.py          # Grid-search the fusion weight α
+│   ├── embedding_backends.py   # Swap MiniLM ↔ PubMedBERT ↔ BioSentBERT encoders
+│   ├── synonym_expansion.py    # Kaggle snake_case → clinical-prose synonyms
 │   ├── medquad_preprocessor.py # MedQuAD XML → chunked JSONL passages
 │   └── config.py               # Shared paths and hyperparameters
 ├── data/
 │   ├── raw/                    # Source data (not committed — see Data Setup below)
 │   ├── processed/
 │   │   ├── transactions.csv    # 4,920 records × 41 diseases (Kaggle)
-│   │   └── association_rules.csv  # 508 mined rules (support≥0.01, conf≥0.5)
+│   │   └── association_rules.csv  # 969 mined rules (support≥0.005, conf≥0.5)
 │   └── results/
-│       ├── ablation_summary.csv   # Per-mode metrics
+│       ├── ablation_summary.csv   # Per-mode metrics (new α=0.3 fused run)
+│       ├── alpha_sweep.csv        # Recall/MRR vs α grid
 │       └── experiment_results.csv # Per-case results
 ├── notebooks/
+│   └── rule_coverage_and_alpha_sensitivity.ipynb
 └── docs/
+    └── check_in_4_report.md
 ```
 
 ---
@@ -110,14 +130,18 @@ git clone https://github.com/abachaa/MedQuAD data/raw/MedQuAD
 python src/etl.py --source kaggle --csv data/raw/dataset.csv
 
 # Step 2 — Mine association rules (raise --min_support if OOM)
-python src/mining.py --min_support 0.03 --min_confidence 0.5
+python src/mining.py --min_support 0.005 --min_confidence 0.5
 
 # Step 3 — Preprocess MedQuAD for retrieval
 python src/medquad_preprocessor.py
 
 # Step 4 — Run full experiment + ablation
 python src/run_experiment.py --rules data/processed/association_rules.csv \
-    --corpus data/raw/passages.jsonl --n_cases 200 --alpha 0.6
+    --corpus data/raw/passages.jsonl --n_cases 200 --alpha 0.3
+
+# Step 5 — (optional) grid-search the fusion weight α
+python src/alpha_sweep.py --rules data/processed/association_rules.csv \
+    --n_cases 200
 ```
 
 Results are written to `data/results/`.
