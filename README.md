@@ -2,7 +2,7 @@
 
 A hybrid diagnostic system that fuses **FP-Growth association rule mining** with **dense retrieval (RAG)** to rank likely diagnoses from a patient's symptom set — backed by biomedical literature.
 
-> **Course:** CS 226 Data Mining — San José State University, Spring 2026  
+> **Course:** CMPE 255 Data Mining — San José State University, Spring 2026  
 > **Team:** Sakshat Nandkumar Patil · Vineet Kumar · Aishwarya Madhave
 
 ---

@@ -1,5 +1,5 @@
 ---
-title: "CS 226 Data Mining: Project Check-In 4"
+title: "CMPE 255 Data Mining: Project Check-In 4"
 subtitle: "Symptom-Based Disease Identification via Hybrid FP-Growth + Retrieval-Augmented Generation"
 author:
   - Sakshat Nandkumar Patil
@@ -10,7 +10,7 @@ date: "April 2026"
 
 # Draft Project Report
 
-**Course:** CS 226 Data Mining, San José State University, Spring 2026
+**Course:** CMPE 255 Data Mining, San José State University, Spring 2026
 
 **Repository:** <https://github.com/sakshat-patil/Symptom-Based-Disease-Identification-via-RAG>
 
