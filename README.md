@@ -48,6 +48,59 @@ is that every prediction is auditable.
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Data flow
+
+A more complete view including external services (GitHub renders this as a real diagram):
+
+```mermaid
+flowchart TB
+    subgraph CLIENT["Web client · Next.js 14"]
+        UI["Symptom rail, controls,<br/>pipeline timeline,<br/>insights dashboard"]
+        UI -->|"POST /diagnose/stream<br/>(SSE)"| API
+        UI -->|"GET /symptoms · /sources · /config<br/>POST /suggest · /explain_symptom · /differential"| API
+    end
+
+    subgraph SERVICE["FastAPI microservice · port 8001"]
+        API["Routing + lifespan<br/>model load"]
+        API --> MINER["Mining scorer<br/>FP-Growth"]
+        API --> RETR["Dense retriever<br/>(VectorStore abstraction)"]
+        API --> RERANK["Cross-encoder /<br/>Pinecone reranker"]
+        API --> EVID["Evidence cards<br/>(claim + tier)"]
+        API --> EXPL["Clinical explainer<br/>(template / OpenAI)"]
+        API --> FUSE["Hybrid fusion<br/>α·retr + (1-α)·mining"]
+    end
+
+    subgraph DATA["Data tier · filesystem"]
+        TX[("transactions.csv<br/>4,920 rows")]
+        AR[("association_rules.csv<br/>23,839 rules")]
+        PASS[("passages.jsonl<br/>24,063 MedQuAD passages")]
+        FAISS[("FAISS indices<br/>MiniLM 384d / PubMedBERT 768d")]
+    end
+
+    subgraph EXT["External SaaS"]
+        AZURE["Azure OpenAI<br/>text-embedding-3-large (3072d)<br/>+ gpt-5.3-chat"]
+        PC["Pinecone Serverless<br/>255-data-mining (3072d) +<br/>medical-rag-medquad (768d)"]
+        PCRR["Pinecone Inference<br/>Cohere rerank-3.5 / BGE-v2"]
+    end
+
+    MINER --> AR
+    RETR --> PASS
+    RETR --> FAISS
+    RETR -->|"vector search"| PC
+    RETR -.->|"Azure embeddings"| AZURE
+    RERANK -.->|"managed rerank"| PCRR
+    EXPL -.->|"chat completions"| AZURE
+
+    classDef external fill:#fef9e7,stroke:#b88500
+    class EXT,AZURE,PC,PCRR external
+    classDef storage fill:#f0fdf4,stroke:#2f7a4f
+    class DATA,TX,AR,PASS,FAISS storage
+    classDef service fill:#eff6ff,stroke:#1e40af
+    class SERVICE,API,MINER,RETR,RERANK,EVID,EXPL,FUSE service
+    classDef client fill:#faf5ff,stroke:#6b21a8
+    class CLIENT,UI client
+```
+
 The system covers the six steps from our project proposal:
 
 | # | Proposal step | Where it lives |

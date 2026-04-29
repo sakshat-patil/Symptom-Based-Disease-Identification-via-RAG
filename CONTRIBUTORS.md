@@ -31,7 +31,3 @@ When components needed to talk to each other (e.g., the cross-encoder needs the 
 - **min_support = 0.005 vs 0.01.** Check-in 3 used 0.01 and left 21/41 diseases without rules. We dropped to 0.005 in Check-in 4 (and kept it for the final), which gives us 100% disease coverage at the cost of a noisier rule set; the overlap weighting in `MiningScorer.score` neutralises most of the noise.
 
 - **α default.** The alpha sweep is flat across 0.1–0.4. We picked 0.3 to match the operating point we publicly committed to in Check-in 4.
-
-## Acknowledgments
-
-We thank Prof. Bertin Cordova-Diba for the office-hours feedback on the Check-in 3 vocabulary-mismatch finding, which directly seeded the synonym-expansion module.
