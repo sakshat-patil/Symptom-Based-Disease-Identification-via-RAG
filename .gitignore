@@ -2,3 +2,17 @@
 __pycache__/
 *.pyc
 .DS_Store
+data/raw/MedQuAD/
+data/raw/*.xml
+data/processed/passages.jsonl
+data/processed/embeddings_*.npy
+data/processed/faiss_*.index
+.ipynb_checkpoints/
+*.egg-info/
+.pytest_cache/
+
+# Environment / secrets — never commit real credentials. Use .env.example
+# as the committed template.
+.env
+.env.local
+.env.*.local
