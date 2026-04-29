@@ -333,7 +333,7 @@ code/
 └── README.md
 ```
 
-The final report PDF and the slide deck live at `../deliverables/` (one level up from the project folder).
+The final report PDF and the slide deck live at `deliverables/report/final_report.pdf` and `deliverables/slides/presentation.pptx`. Both are regenerable by running `python scripts/build_report_pdf.py` and `python scripts/build_slides.py`.
 
 ### Re-capturing the screenshots
 
