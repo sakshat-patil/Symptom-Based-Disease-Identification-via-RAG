@@ -1,0 +1,2 @@
+patient_id,encounter_id,condition,symptoms
+P-001,E-1,heart_attack,chest_pain|lightheadedness|sweating
