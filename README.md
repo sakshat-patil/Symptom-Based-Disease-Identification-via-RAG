@@ -61,6 +61,43 @@ The system covers the six steps from our project proposal:
 
 ---
 
+## Headline metrics
+
+**200 synthetic test cases**, default config (MiniLM + synonym expansion, α = 0.3):
+
+| Variant | Mode | R@1 | R@5 | R@10 | MRR |
+| --- | --- | --- | --- | --- | --- |
+| mining-only | α=0.0 | 0.790 | 0.870 | 0.870 | 0.829 |
+| MiniLM | retrieval-only | 0.130 | 0.180 | 0.180 | 0.151 |
+| **MiniLM** | **fused α=0.3** | **0.825** | **0.890** | **0.890** | **0.857** |
+| MiniLM + syn | fused α=0.3 | 0.820 | 0.895 | 0.895 | 0.857 |
+| PubMedBERT + syn | fused α=0.3 | 0.815 | 0.875 | 0.875 | 0.843 |
+
+The fused configuration beats the strong mining-only baseline by **+3.5 R@1**, and retrieval-only alone is poor (R@10 = 0.18) — the lift comes from the *combination*. PubMedBERT does not strictly beat MiniLM here; on this synthetic test distribution, lexical synonym bridging contributes more than encoder pre-training.
+
+**α-sweep optimum** (PubMedBERT + synonyms): **R@1 = 0.840, R@10 = 0.925, MRR = 0.873** on the plateau α ∈ [0.1, 0.4]. We ship α = 0.3 as the default; the metric collapses past α = 0.6 as retrieval starts dominating.
+
+**Production demo** (Azure OpenAI 3072d + Pinecone + GPT-5.3 explainer) on the *Cardiac event* preset:
+- **Heart Attack ranks #1**, fused = **0.831** (mining = 1.000, retrieval = 0.439)
+- 4 of 41 disease classes get any retrieval signal — exactly the differential a clinician would consider
+- 1 evidence card from NIH MedlinePlus surfaces; tier-1 source
+
+**End-to-end latency** on the default offline config (MiniLM + template explainer + FAISS, 100 queries on M3 Pro):
+
+| Stage | mean | p50 | p95 |
+| --- | --- | --- | --- |
+| mining_score | 1.1 ms | 1.2 ms | 1.4 ms |
+| retrieval | 11.1 ms | 6.5 ms | 18.4 ms |
+| fuse | 0.0 ms | 0.0 ms | 0.0 ms |
+| explain | 0.1 ms | 0.0 ms | 0.2 ms |
+| **TOTAL** | **12.3 ms** | **7.6 ms** | **19.6 ms** |
+
+Full RAG path (PubMedBERT + cross-encoder + OpenAI structured explainer): ~633 ms mean, 380 ms p50. The Azure GPT-5.3 path is slower again (~3–6 s, dominated by reasoning tokens) and is the right tradeoff only when the four-section structured explanation is being demoed.
+
+**Test suite:** 155 tests across 13 modules; 147 unit tests run in ~4 s; the 8 live integration tests verify Azure embeddings come back at the expected dimension, the production Pinecone index is populated and queryable, the Pinecone reranker auto-falls-back from Cohere to BGE on 403, and the end-to-end Azure → Pinecone path surfaces cardiac-focus passages for the cardiac probe.
+
+---
+
 ## Quickstart
 
 ```bash
@@ -178,34 +215,6 @@ This is served by the `/explain_symptom` endpoint. When `OPENAI_API_KEY` is set 
 **Dark mode.** Theme toggle in the topbar. OKLCH color tokens flip; everything stays legible:
 
 ![Dark mode](docs/screenshots/04-dark-mode.png)
-
----
-
-## Headline numbers
-
-200 synthetic test cases, default config (MiniLM + synonym expansion, α = 0.3):
-
-| Variant | Mode | R@1 | R@5 | R@10 | MRR |
-| --- | --- | --- | --- | --- | --- |
-| mining-only | α=0.0 | 0.790 | 0.870 | 0.870 | 0.829 |
-| MiniLM | retrieval-only | 0.130 | 0.180 | 0.180 | 0.151 |
-| **MiniLM** | **fused α=0.3** | **0.825** | **0.890** | **0.890** | **0.857** |
-| MiniLM+syn | fused α=0.3 | 0.820 | 0.895 | 0.895 | 0.857 |
-| PubMedBERT+syn | fused α=0.3 | 0.815 | 0.875 | 0.875 | 0.843 |
-
-α-sweep optimum (PubMedBERT + synonyms): **R@1 = 0.840, R@10 = 0.925, MRR = 0.873** at α ∈ [0.1, 0.4].
-
-End-to-end latency on the default config (MiniLM + template explainer + FAISS), 100 queries on M3 Pro:
-
-| Stage | mean | p50 | p95 |
-| --- | --- | --- | --- |
-| mining_score | 1.1 ms | 1.2 ms | 1.4 ms |
-| retrieval | 11.1 ms | 6.5 ms | 18.4 ms |
-| fuse | 0.0 ms | 0.0 ms | 0.0 ms |
-| explain | 0.1 ms | 0.0 ms | 0.2 ms |
-| **TOTAL** | **12.3 ms** | **7.6 ms** | **19.6 ms** |
-
-Full path with PubMedBERT + cross-encoder + OpenAI explainer: ~633 ms mean / 380 ms p50.
 
 ---
 
@@ -366,7 +375,3 @@ clinical "cardiac" probe is semantically closer to itself than to dermatologic
 queries, the `255-data-mining` index has 24,063 populated vectors, the
 end-to-end Azure→Pinecone path surfaces cardiac-focus passages, and the
 Pinecone reranker auto-falls-back from Cohere to BGE on a 403.
-
-## License
-
-MIT.

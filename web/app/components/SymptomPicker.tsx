@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
 import { api, ExplainSymptomResponse } from "../api";
 
@@ -265,8 +266,10 @@ export function SymptomPicker({ available, selected, onChange }: Props) {
         </div>
       </div>
 
-      {/* AI symptom explainer modal */}
-      {explainTok && (
+      {/* AI symptom explainer modal — portaled to document.body so it
+          escapes the rail's sticky stacking context (otherwise it renders
+          behind the main column). */}
+      {explainTok && typeof window !== "undefined" && createPortal(
         <div className="modal-backdrop" onClick={() => setExplainTok(null)}>
           <div
             className="modal card"
@@ -328,7 +331,8 @@ export function SymptomPicker({ available, selected, onChange }: Props) {
               </p>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
