@@ -692,7 +692,7 @@ def differential(req: DifferentialRequest):
         return out
 
     rule_block = "\n".join(
-        f"  {i+1}. {c.disease.replace('_', ' ')} — fused {c.fused_score:.3f} "
+        f"  {i+1}. {c.disease.replace('_', ' ')}, fused {c.fused_score:.3f} "
         f"(mining {c.mining_score:.3f}, retrieval {c.retrieval_score:.3f})"
         for i, c in enumerate(top3)
     )
@@ -707,7 +707,7 @@ def differential(req: DifferentialRequest):
         "End with one or two concrete next steps a clinician would take "
         "(e.g., ECG, troponin, CBC, imaging) appropriate to the top "
         "candidate. Tone: concise, clinical, hedged. No disclaimers, "
-        "no bullet points, no headings — one paragraph of prose."
+        "no bullet points, no headings, one paragraph of prose."
     )
     sys_prompt = (
         "You are a clinical decision-support assistant generating concise "
@@ -801,7 +801,7 @@ def diagnose(req: DiagnoseRequest):
             s.replace("_", " ") for s in req.symptoms)
         ms = (time.perf_counter() - t) * 1000.0
         _stage("build_query", "Build query string",
-                f"{len(req.symptoms)} symptoms → natural-language probe",
+                f"{len(req.symptoms)} symptoms to natural-language probe",
                 ms, {"query": base_query})
 
         # Stage 2: optional synonym expansion.
@@ -828,7 +828,7 @@ def diagnose(req: DiagnoseRequest):
         ms = (time.perf_counter() - t) * 1000.0
         norm = float(np.linalg.norm(q_vec[0])) if q_vec.shape[0] else 0.0
         _stage("encode", "Encode query",
-                f"{retr.backend.name} → {retr.backend.dim}d vector",
+                f"{retr.backend.name} to {retr.backend.dim}d vector",
                 ms,
                 {"backend": retr.backend.name, "dim": int(retr.backend.dim),
                  "vector_norm": round(norm, 4),
@@ -856,8 +856,8 @@ def diagnose(req: DiagnoseRequest):
             for m in matches[:10]
         ]
         _stage("vector_search", "Vector search",
-                f"{store_kind} · top-{len(matches)} cosine matches"
-                + (f" · filter={metadata_filter}" if metadata_filter else ""),
+                f"{store_kind}, top-{len(matches)} cosine matches"
+                + (f", filter={metadata_filter}" if metadata_filter else ""),
                 ms,
                 {"store": store_kind, "top_k": len(matches),
                  "filter": metadata_filter, "top_matches": raw_matches_for_trace})
@@ -891,7 +891,7 @@ def diagnose(req: DiagnoseRequest):
         retr_passages = per_disease_passages
         ms = (time.perf_counter() - t) * 1000.0
         _stage("attribute", "Disease attribution",
-                f"{len(matches)} passages → {len(per_disease_score)} of "
+                f"{len(matches)} passages to {len(per_disease_score)} of "
                 f"{len(retr.disease_universe)} disease classes",
                 ms,
                 {"diseases_hit": len(per_disease_score),
@@ -948,7 +948,7 @@ def diagnose(req: DiagnoseRequest):
                          "score": round(conf * (len(ante & sym_set) / max(1, len(ante))), 3)})
                     break  # one rule per disease for the inspector
     _stage("mining", "Mining scorer",
-            f"FP-Growth · {len(mine_scores)} of {len(miner.diseases)} diseases scored",
+            f"FP-Growth, {len(mine_scores)} of {len(miner.diseases)} diseases scored",
             ms,
             {"diseases_scored": len(mine_scores),
              "rules_in_table": sum(len(v) for v in miner.rules_by_disease.values()),
@@ -959,7 +959,7 @@ def diagnose(req: DiagnoseRequest):
     candidates = fuse(retr_scores, mine_scores, alpha=used_alpha)[:req.top_n]
     ms = (time.perf_counter() - t) * 1000.0
     _stage("fuse", "Hybrid fusion",
-            f"FusedScore = α·retrieval + (1-α)·mining · α={used_alpha:.2f}",
+            f"FusedScore = α, retrieval + (1-α), mining, α={used_alpha:.2f}",
             ms,
             {"alpha": used_alpha, "mode": req.mode,
              "candidates": [
@@ -1058,11 +1058,11 @@ def diagnose(req: DiagnoseRequest):
     # explain_total. Evidence-card construction is cheap and counted as the
     # remainder.)
     _stage("evidence", "Evidence cards",
-            f"{len(candidates)} diagnoses · claim-level extraction · tier sort",
+            f"{len(candidates)} diagnoses, claim-level extraction, tier sort",
             0.0,  # accurate per-call timing is below the noise floor
             {"per_diagnosis": evidence_summary})
     _stage("explain", "Clinical explanation",
-            f"{explainer.name} · 4-section JSON · {len(candidates)} diagnoses",
+            f"{explainer.name}, 4-section JSON, {len(candidates)} diagnoses",
             explain_total,
             {"backend": explainer.name,
              "model": getattr(explainer, "model", None),
@@ -1140,7 +1140,7 @@ def diagnose_stream(req: DiagnoseRequest):
     Validation errors return 400 immediately (not streamed) since there's
     nothing useful to stream when the request itself is malformed.
     """
-    # Validation — same shape as /diagnose. Done up front so a 400
+    # Validation, same shape as /diagnose. Done up front so a 400
     # short-circuits before we open the stream.
     if not req.symptoms:
         raise HTTPException(400, "no symptoms supplied")
@@ -1195,7 +1195,7 @@ def diagnose_stream(req: DiagnoseRequest):
                     s.replace("_", " ") for s in req.symptoms)
                 ms = (time.perf_counter() - t) * 1000.0
                 yield stage("build_query", "Build query string",
-                              f"{len(req.symptoms)} symptoms → natural-language probe",
+                              f"{len(req.symptoms)} symptoms to natural-language probe",
                               ms, {"query": base_query})
 
                 t = time.perf_counter()
@@ -1219,7 +1219,7 @@ def diagnose_stream(req: DiagnoseRequest):
                 ms = (time.perf_counter() - t) * 1000.0
                 norm = float(np.linalg.norm(q_vec[0])) if q_vec.shape[0] else 0.0
                 yield stage("encode", "Encode query",
-                              f"{retr.backend.name} → {retr.backend.dim}d vector",
+                              f"{retr.backend.name} to {retr.backend.dim}d vector",
                               ms,
                               {"backend": retr.backend.name,
                                "dim": int(retr.backend.dim),
@@ -1242,8 +1242,8 @@ def diagnose_stream(req: DiagnoseRequest):
                      "question": (m.metadata or {}).get("question", "")[:120]}
                     for m in matches[:10]]
                 yield stage("vector_search", "Vector search",
-                              f"{store_kind} · top-{len(matches)} cosine matches"
-                              + (f" · filter={metadata_filter}" if metadata_filter else ""),
+                              f"{store_kind}, top-{len(matches)} cosine matches"
+                              + (f", filter={metadata_filter}" if metadata_filter else ""),
                               ms,
                               {"store": store_kind, "top_k": len(matches),
                                "filter": metadata_filter, "top_matches": top_matches})
@@ -1275,7 +1275,7 @@ def diagnose_stream(req: DiagnoseRequest):
                 retr_passages = per_disease_passages
                 ms = (time.perf_counter() - t) * 1000.0
                 yield stage("attribute", "Disease attribution",
-                              f"{len(matches)} passages → {len(per_disease_score)} of "
+                              f"{len(matches)} passages to {len(per_disease_score)} of "
                               f"{len(retr.disease_universe)} disease classes",
                               ms,
                               {"diseases_hit": len(per_disease_score),
@@ -1329,7 +1329,7 @@ def diagnose_stream(req: DiagnoseRequest):
                                  "score": round(conf * (len(ante & sym_set) / max(1, len(ante))), 3)})
                             break
             yield stage("mining", "Mining scorer",
-                          f"FP-Growth · {len(mine_scores)} of {len(miner.diseases)} diseases scored",
+                          f"FP-Growth, {len(mine_scores)} of {len(miner.diseases)} diseases scored",
                           ms,
                           {"diseases_scored": len(mine_scores),
                            "rules_in_table": sum(len(v) for v in miner.rules_by_disease.values()),
@@ -1340,7 +1340,7 @@ def diagnose_stream(req: DiagnoseRequest):
             candidates = fuse(retr_scores, mine_scores, alpha=used_alpha)[:req.top_n]
             ms = (time.perf_counter() - t) * 1000.0
             yield stage("fuse", "Hybrid fusion",
-                          f"FusedScore = α·retrieval + (1-α)·mining · α={used_alpha:.2f}",
+                          f"FusedScore = α, retrieval + (1-α), mining, α={used_alpha:.2f}",
                           ms,
                           {"alpha": used_alpha, "mode": req.mode,
                            "candidates": [
@@ -1401,7 +1401,7 @@ def diagnose_stream(req: DiagnoseRequest):
                         if cards else None)})
             ms = (time.perf_counter() - t) * 1000.0
             yield stage("evidence", "Evidence cards",
-                          f"{len(candidates)} diagnoses · claim-level extraction · tier sort",
+                          f"{len(candidates)} diagnoses, claim-level extraction, tier sort",
                           ms, {"per_diagnosis": evidence_summary})
 
             for cand in candidates:
@@ -1436,7 +1436,7 @@ def diagnose_stream(req: DiagnoseRequest):
                     explanation=expl.to_dict()))
 
             yield stage("explain", "Clinical explanation",
-                          f"{explainer.name} · 4-section JSON · {len(candidates)} diagnoses",
+                          f"{explainer.name}, 4-section JSON, {len(candidates)} diagnoses",
                           explain_total,
                           {"backend": explainer.name,
                            "model": getattr(explainer, "model", None),

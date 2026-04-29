@@ -41,7 +41,7 @@ function ExplanationBlock({
   backendTag: string;
 }) {
   const rows: { k: keyof typeof ex; label: string; icon: "link" | "scale" | "check" | "warn"; warn?: boolean }[] = [
-    { k: "symptom_disease_link", label: "Symptom → disease link", icon: "link" },
+    { k: "symptom_disease_link", label: "Symptom to disease link", icon: "link" },
     { k: "statistical_prior", label: "Statistical prior", icon: "scale" },
     { k: "evidence_quality", label: "Evidence quality", icon: "check" },
     { k: "whats_missing", label: "What this system can't tell you", icon: "warn", warn: true },
@@ -166,10 +166,10 @@ export function DiagnosisCard({ rank, diag, maxScore }: Props) {
               <span className="rule__antecedent">
                 {`{${r.antecedent.map((a) => a.replace(/_/g, " ")).join(", ")}}`}
               </span>
-              <span className="rule__arrow">→</span>
+              <span className="rule__arrow">to</span>
               <span className="rule__disease">{diag.disease_pretty}</span>
               <span className="rule__stats">
-                conf {r.confidence.toFixed(2)} · lift {r.lift.toFixed(1)}
+                conf {r.confidence.toFixed(2)}, lift {r.lift.toFixed(1)}
               </span>
             </div>
           ))}

@@ -52,7 +52,7 @@ export default function InsightsPage() {
               Record-Based Medical Diagnostic Assistant
             </div>
             <div className="topbar__sub">
-              CMPE 255 · San José State University
+              CMPE 255, San José State University
             </div>
           </div>
         </div>
@@ -99,7 +99,7 @@ export default function InsightsPage() {
             <h2 className="h-section">
               Project insights
               <span>
-                4 charts · live latency from the last{" "}
+                4 charts, live latency from the last{" "}
                 {data.latency_recent.length || 0} diagnoses
               </span>
             </h2>
@@ -145,7 +145,7 @@ function AlphaSweepCard({ data }: { data: InsightsResponse }) {
   return (
     <div className="card insights__card">
       <CardHeader
-        title="α-sweep · Recall@K and MRR vs fusion weight"
+        title="α-sweep, Recall@K and MRR vs fusion weight"
         caption="0.0 = mining-only; 1.0 = retrieval-only. The default α=0.30 sits in the middle of the optimal plateau."
       />
       <ResponsiveContainer width="100%" height={260}>
@@ -323,7 +323,7 @@ function LiveLatencyCard({ data }: { data: InsightsResponse }) {
   return (
     <div className="card insights__card">
       <CardHeader
-        title="Live latency · last 30 diagnoses"
+        title="Live latency, last 30 diagnoses"
         caption={
           recent.length === 0
             ? "No diagnoses run yet in this API session. Run one on the Diagnose tab."

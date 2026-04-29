@@ -50,7 +50,7 @@ export default function Home() {
   const [streamStages, setStreamStages] = useState<PipelineStage[]>([]);
 
   // Side-by-side compare mode. When on, /diagnose/stream gets fired twice
-  // in parallel — one against azure-openai (3072d Pinecone) and one
+  // in parallel, one against azure-openai (3072d Pinecone) and one
   // against pubmedbert (768d Pinecone). Each lane keeps its own state.
   const [compareMode, setCompareMode] = useState(false);
   const [respB, setRespB] = useState<DiagnoseResponse | null>(null);
@@ -141,7 +141,7 @@ export default function Home() {
       trace: true,
     };
 
-    // Lane A — uses the user's currently selected backend. In compare
+    // Lane A, uses the user's currently selected backend. In compare
     // mode this is forced to azure-openai so the two lanes are comparable
     // (azure-openai vs pubmedbert).
     const laneABackend = compareMode ? "azure-openai" : backend;
@@ -201,7 +201,7 @@ export default function Home() {
 
   // status pill text
   const statusBackend = resp?.used_backend ?? backend;
-  const statusVS = config?.vector_store ?? "—";
+  const statusVS = config?.vector_store ?? ", ";
   const statusExp =
     resp?.explainer_backend?.replace("openai:", "") ?? explainer;
 
@@ -215,7 +215,7 @@ export default function Home() {
               Record-Based Medical Diagnostic Assistant
             </div>
             <div className="topbar__sub">
-              CMPE 255 · San José State University
+              CMPE 255, San José State University
             </div>
           </div>
         </div>
@@ -234,13 +234,13 @@ export default function Home() {
         <span className="status">
           <span className="dot" />
           <span className="mono">{statusVS}</span>
-          <span style={{ color: "var(--ink-4)" }}>·</span>
+          <span style={{ color: "var(--ink-4)" }}>, </span>
           <span className="mono">{statusBackend}</span>
-          <span style={{ color: "var(--ink-4)" }}>·</span>
+          <span style={{ color: "var(--ink-4)" }}>, </span>
           <span className="mono">{statusExp}</span>
         </span>
         <span className="topbar__authors">
-          <strong>Sakshat Patil</strong> · <strong>Vineet Kumar</strong> ·{" "}
+          <strong>Sakshat Patil</strong>, <strong>Vineet Kumar</strong> , {" "}
           <strong>Aishwarya Madhave</strong>
         </span>
         <button
@@ -303,7 +303,7 @@ export default function Home() {
               ? "Diagnosing…"
               : symptoms.length === 0
               ? "Add a symptom to diagnose"
-              : `Diagnose · ${symptoms.length} symptom${symptoms.length === 1 ? "" : "s"}`}
+              : `Diagnose, ${symptoms.length} symptom${symptoms.length === 1 ? "" : "s"}`}
           </button>
           {error && <div className="error-banner">{error}</div>}
         </aside>
@@ -365,8 +365,8 @@ export default function Home() {
                   <h3 className="h-section" style={{ marginTop: 4 }}>
                     Ranked diagnoses
                     <span>
-                      top {resp.diagnoses.length} · α{" "}
-                      {resp.used_alpha.toFixed(2)} · mode {resp.used_mode}
+                      top {resp.diagnoses.length}, α{" "}
+                      {resp.used_alpha.toFixed(2)}, mode {resp.used_mode}
                     </span>
                   </h3>
                   {resp.diagnoses.map((d, i) => (
@@ -383,18 +383,18 @@ export default function Home() {
             </>
           )}
 
-          {/* Compare mode — two lanes side by side */}
+          {/* Compare mode, two lanes side by side */}
           {compareMode && (loading || loadingB || resp || respB) && (
             <>
               <h3 className="h-section" style={{ marginTop: 0 }}>
                 Side-by-side compare
                 <span>
-                  azure-openai · 3072d  vs.  pubmedbert · 768d
+                  azure-openai, 3072d  vs.  pubmedbert, 768d
                 </span>
               </h3>
               <div className="compare-grid">
                 <CompareLane
-                  title="azure-openai · 3072d Pinecone"
+                  title="azure-openai, 3072d Pinecone"
                   loading={loading}
                   resp={resp}
                   streamStages={streamStages}
@@ -408,7 +408,7 @@ export default function Home() {
                   error={error}
                 />
                 <CompareLane
-                  title="pubmedbert · 768d Pinecone"
+                  title="pubmedbert, 768d Pinecone"
                   loading={loadingB}
                   resp={respB}
                   streamStages={streamStagesB}
@@ -470,7 +470,7 @@ function CompareLane(props: {
         <h4 className="compare-lane__title">{title}</h4>
         {resp && (
           <span className="pill pill--mono">
-            top: {resp.diagnoses[0]?.disease.replace(/_/g, " ")} ·{" "}
+            top: {resp.diagnoses[0]?.disease.replace(/_/g, " ")} , {" "}
             {resp.diagnoses[0]?.fused_score.toFixed(3)}
           </span>
         )}
@@ -551,16 +551,16 @@ function EmptyState({
       <div className="empty__crumbs">
         <span className="dot" />
         <span>{symptomCount} / 15 symptoms</span>
-        <span className="empty__crumb-sep">·</span>
+        <span className="empty__crumb-sep">, </span>
         <span>131 vector tokens</span>
-        <span className="empty__crumb-sep">·</span>
+        <span className="empty__crumb-sep">, </span>
         <span>23,839 mined rules</span>
       </div>
       <h1 className="empty__title">
         What is the patient <em>presenting&nbsp;with?</em>
       </h1>
       <p className="empty__lede">
-        A symptom-first differential. Add what you observe in the rail —
+        A symptom-first differential. Add what you observe in the rail , 
         the system ranks likely diagnoses against{" "}
         <strong>24,063 mined biomedical passages</strong> and{" "}
         <strong>23,839 association rules</strong>, then explains its
@@ -572,9 +572,9 @@ function EmptyState({
         disabled={!hasSymptoms}
       >
         {hasSymptoms
-          ? `Run differential · ${symptomCount} symptom${symptomCount === 1 ? "" : "s"}`
+          ? `Run differential, ${symptomCount} symptom${symptomCount === 1 ? "" : "s"}`
           : "Add at least one symptom to begin"}
-        <span aria-hidden>→</span>
+        <span aria-hidden>to</span>
       </button>
       {!hasSymptoms && (
         <span className="empty__hint">

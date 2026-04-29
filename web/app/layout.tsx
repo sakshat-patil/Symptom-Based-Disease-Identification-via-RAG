@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Record-Based Medical Diagnostic Assistant",
   description:
-    "Hybrid FP-Growth + Retrieval-Augmented Pipeline · CMPE 255 · Patil, Kumar, Madhave",
+    "Hybrid FP-Growth + Retrieval-Augmented Pipeline, CMPE 255, Patil, Kumar, Madhave",
 };
 
 export default function RootLayout({

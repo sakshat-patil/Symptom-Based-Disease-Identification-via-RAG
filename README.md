@@ -1,6 +1,6 @@
 # Record-Based Medical Diagnostic Assistant
 
-**CMPE 255 Data Mining — San José State University, Spring 2026**
+**CMPE 255 Data Mining, San Jose State University, Spring 2026**
 
 | Member | SJSU ID |
 | --- | --- |
@@ -8,13 +8,13 @@
 | Vineet Kumar | 019140433 |
 | Aishwarya Madhave | 019129110 |
 
-A small clinical-decision-support pipeline. Given a patient's symptom set, it
-ranks the most likely diseases and shows the evidence behind each ranking —
+A small clinical decision support pipeline. Given a patient's symptom set, it
+ranks the most likely diseases and shows the evidence behind each ranking:
 the FP-Growth association rule that fired, and the biomedical passages
 retrieved from MedQuAD. The point of the project, more than the score itself,
 is that every prediction is auditable.
 
-![Results view — Cardiac event preset with 4 ranked diagnoses](docs/screenshots/02-results-cardiac.png)
+![Results view: Cardiac event preset with 4 ranked diagnoses](docs/screenshots/02-results-cardiac.png)
 
 ## How the pieces fit together
 
@@ -23,7 +23,7 @@ is that every prediction is auditable.
 │  Next.js 14 web app (TypeScript, App Router, Tailwind)       │
 │   · Symptom chips with autocomplete + 6 clinical presets     │
 │   · Live α slider, mode/backend toggles                      │
-│   · Click any chip → AI clinical gloss for that symptom      │
+│   · Click any chip for AI clinical gloss                     │
 │   · Suggested next symptoms (FP-Growth co-occurrence)        │
 │   · Pipeline timeline with stage-by-stage animation          │
 │   · Differential-diagnosis summary at the top of results     │
@@ -50,31 +50,31 @@ is that every prediction is auditable.
 
 ### Data flow
 
-A more complete view including external services (GitHub renders this as a real diagram):
+A more complete view including external services. GitHub renders the block below as a real diagram.
 
 ```mermaid
 flowchart TB
-    subgraph CLIENT["Web client · Next.js 14"]
+    subgraph CLIENT["Web client / Next.js 14"]
         UI["Symptom rail, controls,<br/>pipeline timeline,<br/>insights dashboard"]
-        UI -->|"POST /diagnose/stream<br/>(SSE)"| API
-        UI -->|"GET /symptoms · /sources · /config<br/>POST /suggest · /explain_symptom · /differential"| API
+        UI -->|"POST /diagnose/stream (SSE)"| API
+        UI -->|"GET /symptoms, /sources, /config<br/>POST /suggest, /explain_symptom, /differential"| API
     end
 
-    subgraph SERVICE["FastAPI microservice · port 8001"]
+    subgraph SERVICE["FastAPI microservice / port 8001"]
         API["Routing + lifespan<br/>model load"]
         API --> MINER["Mining scorer<br/>FP-Growth"]
         API --> RETR["Dense retriever<br/>(VectorStore abstraction)"]
         API --> RERANK["Cross-encoder /<br/>Pinecone reranker"]
         API --> EVID["Evidence cards<br/>(claim + tier)"]
         API --> EXPL["Clinical explainer<br/>(template / OpenAI)"]
-        API --> FUSE["Hybrid fusion<br/>α·retr + (1-α)·mining"]
+        API --> FUSE["Hybrid fusion"]
     end
 
-    subgraph DATA["Data tier · filesystem"]
+    subgraph DATA["Data tier / filesystem"]
         TX[("transactions.csv<br/>4,920 rows")]
         AR[("association_rules.csv<br/>23,839 rules")]
         PASS[("passages.jsonl<br/>24,063 MedQuAD passages")]
-        FAISS[("FAISS indices<br/>MiniLM 384d / PubMedBERT 768d")]
+        FAISS[("FAISS indices<br/>MiniLM 384d, PubMedBERT 768d")]
     end
 
     subgraph EXT["External SaaS"]
@@ -116,24 +116,24 @@ The system covers the six steps from our project proposal:
 
 ## Headline metrics
 
-**200 synthetic test cases**, default config (MiniLM + synonym expansion, α = 0.3):
+**200 synthetic test cases**, default config (MiniLM with synonym expansion, alpha = 0.3):
 
 | Variant | Mode | R@1 | R@5 | R@10 | MRR |
 | --- | --- | --- | --- | --- | --- |
-| mining-only | α=0.0 | 0.790 | 0.870 | 0.870 | 0.829 |
+| mining-only | alpha=0.0 | 0.790 | 0.870 | 0.870 | 0.829 |
 | MiniLM | retrieval-only | 0.130 | 0.180 | 0.180 | 0.151 |
-| **MiniLM** | **fused α=0.3** | **0.825** | **0.890** | **0.890** | **0.857** |
-| MiniLM + syn | fused α=0.3 | 0.820 | 0.895 | 0.895 | 0.857 |
-| PubMedBERT + syn | fused α=0.3 | 0.815 | 0.875 | 0.875 | 0.843 |
+| **MiniLM** | **fused alpha=0.3** | **0.825** | **0.890** | **0.890** | **0.857** |
+| MiniLM + syn | fused alpha=0.3 | 0.820 | 0.895 | 0.895 | 0.857 |
+| PubMedBERT + syn | fused alpha=0.3 | 0.815 | 0.875 | 0.875 | 0.843 |
 
-The fused configuration beats the strong mining-only baseline by **+3.5 R@1**, and retrieval-only alone is poor (R@10 = 0.18) — the lift comes from the *combination*. PubMedBERT does not strictly beat MiniLM here; on this synthetic test distribution, lexical synonym bridging contributes more than encoder pre-training.
+The fused configuration beats the strong mining-only baseline by **+3.5 R@1**, and retrieval-only alone is poor (R@10 = 0.18). The lift comes from the *combination*. PubMedBERT does not strictly beat MiniLM here. On this synthetic test distribution, lexical synonym bridging contributes more than encoder pre-training.
 
-**α-sweep optimum** (PubMedBERT + synonyms): **R@1 = 0.840, R@10 = 0.925, MRR = 0.873** on the plateau α ∈ [0.1, 0.4]. We ship α = 0.3 as the default; the metric collapses past α = 0.6 as retrieval starts dominating.
+**Alpha sweep optimum** (PubMedBERT with synonyms): **R@1 = 0.840, R@10 = 0.925, MRR = 0.873** on the plateau alpha in [0.1, 0.4]. We ship alpha = 0.3 as the default. The metric collapses past alpha = 0.6 as retrieval starts dominating.
 
 **Production demo** (Azure OpenAI 3072d + Pinecone + GPT-5.3 explainer) on the *Cardiac event* preset:
 - **Heart Attack ranks #1**, fused = **0.831** (mining = 1.000, retrieval = 0.439)
-- 4 of 41 disease classes get any retrieval signal — exactly the differential a clinician would consider
-- 1 evidence card from NIH MedlinePlus surfaces; tier-1 source
+- 4 of 41 disease classes get any retrieval signal, exactly the differential a clinician would consider
+- 1 evidence card from NIH MedlinePlus surfaces (tier 1 source)
 
 **End-to-end latency** on the default offline config (MiniLM + template explainer + FAISS, 100 queries on M3 Pro):
 
@@ -145,9 +145,9 @@ The fused configuration beats the strong mining-only baseline by **+3.5 R@1**, a
 | explain | 0.1 ms | 0.0 ms | 0.2 ms |
 | **TOTAL** | **12.3 ms** | **7.6 ms** | **19.6 ms** |
 
-Full RAG path (PubMedBERT + cross-encoder + OpenAI structured explainer): ~633 ms mean, 380 ms p50. The Azure GPT-5.3 path is slower again (~3–6 s, dominated by reasoning tokens) and is the right tradeoff only when the four-section structured explanation is being demoed.
+Full RAG path (PubMedBERT + cross-encoder + OpenAI structured explainer): about 633 ms mean, 380 ms p50. The Azure GPT-5.3 path is slower again (3 to 6 seconds, dominated by reasoning tokens) and is the right tradeoff only when the four-section structured explanation is being demoed.
 
-**Test suite:** 155 tests across 13 modules; 147 unit tests run in ~4 s; the 8 live integration tests verify Azure embeddings come back at the expected dimension, the production Pinecone index is populated and queryable, the Pinecone reranker auto-falls-back from Cohere to BGE on 403, and the end-to-end Azure → Pinecone path surfaces cardiac-focus passages for the cardiac probe.
+**Test suite:** 155 tests across 13 modules. 147 unit tests run in about 4 seconds. The 8 live integration tests verify Azure embeddings come back at the expected dimension, the production Pinecone index is populated and queryable, the Pinecone reranker auto falls back from Cohere to BGE on 403, and the end-to-end Azure-to-Pinecone path surfaces cardiac-focus passages for the cardiac probe.
 
 ---
 
@@ -159,7 +159,7 @@ python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Configure secrets (optional — only needed for the Azure + Pinecone path)
+# 2. Configure secrets (optional, only needed for the Azure + Pinecone path)
 cp .env.example .env
 # Edit .env with your OPENAI_API_KEY, OPENAI_BASE_URL, PINECONE_API_KEY, etc.
 # Leave it blank for the offline FAISS + template-explainer demo.
@@ -203,42 +203,42 @@ keys with documentation for each.
 | `PINECONE_RERANK_MODEL` | `bge-reranker-v2-m3` (free) or `cohere-rerank-3.5` |
 | `VECTOR_STORE` | `faiss` (offline default) or `pinecone` |
 
-Shell-exported env vars override `.env`, so CI/prod can still inject secrets the standard way without touching the file.
+Shell-exported env vars override `.env`, so CI or production can still inject secrets the standard way without touching the file.
 
 ### Three runtime profiles, all driven by `.env`
 
 You don't have to memorise which env vars to export. Pick one of the three
 profiles, edit `.env` accordingly, and reboot the API.
 
-**Profile 1 — Offline (default).** Local FAISS + deterministic template
+**Profile 1, Offline (default).** Local FAISS + deterministic template
 explainer. No API keys needed. Set `VECTOR_STORE=faiss` and leave the
-OpenAI / Pinecone keys blank.
+OpenAI and Pinecone keys blank.
 
-**Profile 2 — OpenAI explainer only.** Keep FAISS retrieval, add the
+**Profile 2, OpenAI explainer only.** Keep FAISS retrieval, add the
 GPT-style clinical explanations. Set `OPENAI_API_KEY` (and `OPENAI_BASE_URL`
 if you're using Azure). The UI's `Explainer` dropdown will offer **OpenAI**
 alongside the template.
 
-**Profile 3 — Production demo (Azure embeddings + Pinecone + GPT-5).**
+**Profile 3, Production demo (Azure embeddings + Pinecone + GPT-5).**
 The headline configuration. Fill in everything in `.env`, run the one-time
 seed:
 
 ```bash
 python scripts/seed_pinecone.py --backend azure-openai
 # encodes 24,063 passages via Azure OpenAI, upserts to Pinecone.
-# ~3–6 min, costs ~$0.80 in Azure embedding tokens.
+# 3 to 6 minutes, costs about $0.80 in Azure embedding tokens.
 ```
 
 Then boot the API. The `/config` endpoint will show
 `vector_store: pinecone` and the UI surfaces a `pinecone` badge plus the
-`azure-openai` backend in the dropdown. Metadata filters (source /
+`azure-openai` backend in the dropdown. Metadata filters (source,
 passage type) get pushed down server-side, not post-filtered. The
-Pinecone-hosted reranker auto-falls-back from Cohere to BGE if your
+Pinecone-hosted reranker auto falls back from Cohere to BGE if your
 Pinecone project doesn't have Cohere access enabled.
 
 If you select a backend whose dimension doesn't match the configured
 Pinecone index (e.g. PubMedBERT 768d against a 3072d index), the API
-returns a clean HTTP 400 — and the UI prevents the bad combination from
+returns a clean HTTP 400, and the UI prevents the bad combination from
 being selectable in the first place.
 
 ---
@@ -253,19 +253,19 @@ A few things in the rail are worth calling out because they took real work:
 
 **Click any selected symptom chip** to get a small clinical gloss, the formal synonyms (`thoracic pain`, `angina` for `chest_pain`), and the diseases that symptom is most predictive of in the FP-Growth rule table:
 
-![Chip → AI clinical gloss modal](docs/screenshots/03-explain-modal.png)
+![Chip clinical gloss modal](docs/screenshots/03-explain-modal.png)
 
-This is served by the `/explain_symptom` endpoint. When `OPENAI_API_KEY` is set the gloss comes from `gpt-4o-mini`; otherwise it falls back to a deterministic template stitch built from the synonym dictionary and the rule table. Either way, you get something useful.
+This is served by the `/explain_symptom` endpoint. When `OPENAI_API_KEY` is set the gloss comes from the configured chat model. Otherwise it falls back to a deterministic template stitch built from the synonym dictionary and the rule table. Either way, you get something useful.
 
-**Suggested next symptoms** appears as soon as you have at least one chip. Five ghost chips show the symptoms most likely to co-occur according to the FP-Growth rules — co-occurrence, not the LLM, so it's instant and free. Click one to add it.
+**Suggested next symptoms** appears as soon as you have at least one chip. Five ghost chips show the symptoms most likely to co-occur according to the FP-Growth rules. Co-occurrence, not the LLM, so it is instant and free. Click one to add it.
 
-**Hover any preset** to see the symptoms it loads before you click. We learned this lesson the hard way: in earlier iterations, presets looked identical and the user had no idea what each one did.
+**Hover any preset** to see the symptoms it loads before you click. We learned this lesson the hard way. In earlier iterations, presets looked identical and the user had no idea what each one did.
 
-**Pipeline timeline.** After you hit Diagnose, the main column shows a 7-stage timeline (encode → vector search → disease attribution → mining → fusion → evidence cards → clinical explanation) that animates as the request runs. While the request is in flight the timings are estimates; once the response lands they snap to the real values from `latency_ms`. We added this because a 6-second wait was confusing without any sense of what the pipeline was doing.
+**Pipeline timeline.** After you hit Diagnose, the main column shows a 7-stage timeline (encode, vector search, disease attribution, mining, fusion, evidence cards, clinical explanation) that animates as the request runs. While the request is in flight the timings are estimates. Once the response lands they snap to the real values from `latency_ms`. We added this because a 6-second wait was confusing without any sense of what the pipeline was doing.
 
-**Differential summary.** At the top of the results, above the ranked cards, you get a one-paragraph clinician-style summary of the case from `/differential`. Same fallback story as the other LLM features — uses GPT-4o-mini if available, otherwise a deterministic stitch.
+**Differential summary.** At the top of the results, above the ranked cards, you get a one-paragraph clinician-style summary of the case from `/differential`. Same fallback story as the other LLM features. It uses the configured chat model if available, otherwise a deterministic stitch.
 
-**Dark mode.** Theme toggle in the topbar. OKLCH color tokens flip; everything stays legible:
+**Dark mode.** Theme toggle in the topbar. OKLCH color tokens flip. Everything stays legible.
 
 ![Dark mode](docs/screenshots/04-dark-mode.png)
 
@@ -275,15 +275,15 @@ This is served by the `/explain_symptom` endpoint. When `OPENAI_API_KEY` is set 
 
 A few things we tried that we didn't ship in the headline numbers, in case the grader is curious how we got here:
 
-- **`min_support = 0.01`.** Check-in 3 used this and 21 of 41 diseases ended up with no rules, which made fusion useless for those classes. Dropping to `0.005` covers all 41 at the cost of a noisier rule list — the overlap weighting in `MiningScorer.score` neutralises most of the noise.
+- **`min_support = 0.01`.** Check-in 3 used this and 21 of 41 diseases ended up with no rules, which made fusion useless for those classes. Dropping to `0.005` covers all 41 at the cost of a noisier rule list. The overlap weighting in `MiningScorer.score` neutralises most of the noise.
 
 - **Falling back to passage text for disease attribution.** Earlier we matched a retrieved passage to a disease using its question *and* its answer body. That triggered every "What is Chest Pain?" article to attribute to every cardiopulmonary disease. We now match on focus first and question second, never on the answer body.
 
-- **Cohere Rerank 3.5 by default.** We initially defaulted the Pinecone reranker to Cohere because it's the strongest model on offer. It turned out our Pinecone project doesn't have Cohere access enabled, and the request 403'd. We added an auto-fallback to `bge-reranker-v2-m3` (which is free on every Pinecone project) and made it the default; users can opt into Cohere via `PINECONE_RERANK_MODEL=cohere-rerank-3.5`.
+- **Cohere Rerank 3.5 by default.** We initially defaulted the Pinecone reranker to Cohere because it's the strongest model on offer. It turned out our Pinecone project doesn't have Cohere access enabled, and the request 403'd. We added an auto-fallback to `bge-reranker-v2-m3` (which is free on every Pinecone project) and made it the default. Users can opt into Cohere via `PINECONE_RERANK_MODEL=cohere-rerank-3.5`.
 
-- **Always-on cross-encoder.** Putting the cross-encoder on the default path improved ordering at K≤5 but added ~100ms per query. We left it as a sidebar toggle.
+- **Always-on cross-encoder.** Putting the cross-encoder on the default path improved ordering at K below 5 but added about 100ms per query. We left it as a sidebar toggle.
 
-- **Word-boundary regex for short keywords.** Our disease keyword index had `hav` (Hepatitis A virus abbreviation) for `hepatitis_a`. It matched inside "have", which is in basically every passage, and inflated retrieval scores for hepatitis_a across the board. We added word-boundary matching for single-token keywords; multi-word phrases still use plain substring. There's a regression test for this case (`tests/test_disease_keywords.py::TestKwMatchesWordBoundary`).
+- **Word-boundary regex for short keywords.** Our disease keyword index had `hav` (Hepatitis A virus abbreviation) for `hepatitis_a`. It matched inside "have", which is in basically every passage, and inflated retrieval scores for hepatitis_a across the board. We added word-boundary matching for single-token keywords. Multi-word phrases still use plain substring. There is a regression test for this case (`tests/test_disease_keywords.py::TestKwMatchesWordBoundary`).
 
 ---
 
@@ -296,15 +296,15 @@ code/
 │   ├── app/                          App Router pages + components
 │   └── package.json
 ├── src/                            Python AI/data layer
-│   ├── etl.py                       Kaggle CSV -> transactions.csv
-│   ├── synthea_etl.py               Synthea FHIR -> transactions.csv
+│   ├── etl.py                       Kaggle CSV to transactions.csv
+│   ├── synthea_etl.py               Synthea FHIR to transactions.csv
 │   ├── mining.py                    FP-Growth pattern mining
 │   ├── mining_scorer.py             query-time rule scoring
-│   ├── medquad_preprocessor.py      MedQuAD XML -> JSONL passages
+│   ├── medquad_preprocessor.py      MedQuAD XML to JSONL passages
 │   ├── embedding_backends.py        MiniLM + PubMedBERT + Azure OpenAI
 │   ├── vector_store.py              FAISS / Pinecone abstraction
 │   ├── retrieval.py                 dense retriever
-│   ├── disease_keywords.py          MedQuAD <-> Kaggle disease mapping
+│   ├── disease_keywords.py          MedQuAD to Kaggle disease mapping
 │   ├── synonym_expansion.py         clinical synonym dictionary
 │   ├── cross_encoder_rerank.py      local cross-encoder rerank
 │   ├── pinecone_rerank.py           Pinecone rerank (Cohere / BGE)
@@ -321,6 +321,7 @@ code/
 │   ├── make_plots.py
 │   ├── build_report_pdf.py
 │   ├── build_slides.py
+│   ├── build_report_docx.py         Word version of the final report
 │   └── capture_screenshots.mjs      headless-chromium UI screenshots
 ├── docs/
 │   └── screenshots/                 PNGs referenced from this README
@@ -328,12 +329,16 @@ code/
 │   ├── raw/                          gitignored
 │   ├── processed/                    artefacts and FAISS indices
 │   └── results/                      ablation/sweep/latency CSVs + PNGs
+├── deliverables/
+│   ├── report/final_report.pdf      IEEE-style PDF
+│   ├── report/final_report.docx     Word version (same content)
+│   └── slides/presentation.pptx     6-slide CMPE 255 deck
 ├── CONTRIBUTORS.md                  who did what + decision log
 ├── requirements.txt
 └── README.md
 ```
 
-The final report PDF and the slide deck live at `deliverables/report/final_report.pdf` and `deliverables/slides/presentation.pptx`. Both are regenerable by running `python scripts/build_report_pdf.py` and `python scripts/build_slides.py`.
+The final report PDF, the Word version, and the slide deck live at `deliverables/report/final_report.pdf`, `deliverables/report/final_report.docx`, and `deliverables/slides/presentation.pptx`. All three are regenerable by running the corresponding `scripts/build_*` script.
 
 ### Re-capturing the screenshots
 
@@ -362,9 +367,11 @@ node scripts/capture_screenshots.mjs
 | GET | `/sources` | MedQuAD source counts (used by the UI's source filter) |
 | GET | `/config` | Which backends, explainers, vector store are live right now |
 | POST | `/diagnose` | Full pipeline: ranked diagnoses + evidence + explanations |
+| POST | `/diagnose/stream` | Same pipeline, server-sent events emitted per stage |
 | POST | `/suggest` | Top-K next symptoms predictive given the current set (FP-Growth) |
 | POST | `/explain_symptom` | One clinical line for a single symptom token (LLM + template fallback) |
 | POST | `/differential` | One-paragraph differential summary across the top-3 candidates |
+| GET | `/insights` | Aggregates that drive the Insights dashboard (alpha sweep, rule counts, source distribution, recent latency) |
 
 All four LLM-flavoured endpoints (`/diagnose`, `/explain_symptom`, `/differential`, plus the OpenAI explainer that runs inside `/diagnose`) fall back to a deterministic template if `OPENAI_API_KEY` isn't set or the upstream call fails. The fallback path is what the test suite exercises by default, so the demo stays reproducible offline.
 
@@ -376,7 +383,7 @@ We ship **155 tests across 13 modules**, split into 147 fast unit tests
 (no network) and 8 live integration tests gated on env vars.
 
 ```bash
-# Fast unit tests only — default
+# Fast unit tests only (default)
 .venv/bin/python -m pytest                  # 147 tests, ~4 s
 
 # Verbose
@@ -385,7 +392,7 @@ We ship **155 tests across 13 modules**, split into 147 fast unit tests
 # Just one file
 .venv/bin/python -m pytest tests/test_evidence.py
 
-# Live integration (Azure + Pinecone) — set env vars first
+# Live integration (Azure + Pinecone), set env vars first
 OPENAI_API_KEY=...  OPENAI_BASE_URL=...  \
 PINECONE_API_KEY=... PINECONE_INDEX_NAME=255-data-mining \
 .venv/bin/python -m pytest -m live          # 8 live tests
@@ -413,18 +420,18 @@ PINECONE_API_KEY=... PINECONE_INDEX_NAME=255-data-mining \
 The suite includes regression tests for three real bugs caught during
 development:
 
-- **`hav` matching `have`** — short keyword false-positives in the disease/passage
+- **`hav` matching `have`.** Short keyword false-positives in the disease/passage
   attribution (`tests/test_disease_keywords.py::TestKwMatchesWordBoundary`).
-- **plural `treatments` not classified as treatment** — passage-type
+- **plural `treatments` not classified as treatment.** Passage-type
   classifier regex missed the plural form
   (`tests/test_evidence.py::TestPassageTypeClassifier::test_treatment_pattern`).
-- **Pinecone dimension mismatch (768d vs 3072d)** — backend auto-validation
-  + clean 400 error when the user picks a backend incompatible with the
+- **Pinecone dimension mismatch (768d vs 3072d).** Backend auto-validation
+  plus a clean 400 error when the user picks a backend incompatible with the
   configured Pinecone index
-  (`tests/test_azure_openai_backend.py` + service-side guard).
+  (`tests/test_azure_openai_backend.py` plus a service-side guard).
 
 Live tests verify: Azure embeddings come back at the expected 3072d, the
 clinical "cardiac" probe is semantically closer to itself than to dermatologic
 queries, the `255-data-mining` index has 24,063 populated vectors, the
-end-to-end Azure→Pinecone path surfaces cardiac-focus passages, and the
-Pinecone reranker auto-falls-back from Cohere to BGE on a 403.
+end-to-end Azure to Pinecone path surfaces cardiac-focus passages, and the
+Pinecone reranker auto falls back from Cohere to BGE on a 403.

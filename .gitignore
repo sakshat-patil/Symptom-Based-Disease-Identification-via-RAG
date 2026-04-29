@@ -1,18 +1,51 @@
+# Python
 .venv/
+venv/
 __pycache__/
 *.pyc
+*.pyo
+.ipynb_checkpoints/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+next-env.d.ts
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Editors / OS
 .DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Dataset artefacts (large, regenerable)
 data/raw/MedQuAD/
+data/raw/synthea_fhir/
 data/raw/*.xml
 data/processed/passages.jsonl
 data/processed/embeddings_*.npy
 data/processed/faiss_*.index
-.ipynb_checkpoints/
-*.egg-info/
-.pytest_cache/
 
-# Environment / secrets — never commit real credentials. Use .env.example
+# Environment / secrets, never commit real credentials. Use .env.example
 # as the committed template.
 .env
 .env.local
 .env.*.local
+*.pem
+*.key
+
+# Misc
+*.log
+playwright-report/
+test-results/
+.coverage
+coverage/

@@ -34,7 +34,7 @@ export function SymptomPicker({ available, selected, onChange }: Props) {
   // Preset hover preview
   const [hoverPreset, setHoverPreset] = useState<string | null>(null);
 
-  // Chip → AI explain popover
+  // Chip to AI explain popover
   const [explainTok, setExplainTok] = useState<string | null>(null);
   const [explainData, setExplainData] = useState<ExplainSymptomResponse | null>(null);
   const [explainLoading, setExplainLoading] = useState(false);
@@ -119,7 +119,7 @@ export function SymptomPicker({ available, selected, onChange }: Props) {
         <div className="section-label">
           Patient symptoms
           <span className="count">
-            {selected.length}/15 · {available.length} tokens
+            {selected.length}/15, {available.length} tokens
           </span>
         </div>
         <div className="card" style={{ padding: 10 }}>
@@ -266,7 +266,7 @@ export function SymptomPicker({ available, selected, onChange }: Props) {
         </div>
       </div>
 
-      {/* AI symptom explainer modal — portaled to document.body so it
+      {/* AI symptom explainer modal, portaled to document.body so it
           escapes the rail's sticky stacking context (otherwise it renders
           behind the main column). */}
       {explainTok && typeof window !== "undefined" && createPortal(

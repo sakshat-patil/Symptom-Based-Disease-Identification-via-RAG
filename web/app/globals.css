@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Clinical decision support — design system from reference/frontend-design.
+/* Clinical decision support, design system from reference/frontend-design.
    Near-white canvas, hairline borders, semibold (not bold) headings,
    Inter UI + JetBrains Mono numerics, deep blue accent. */
 
@@ -415,7 +415,7 @@ mark {
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 .skel-card { padding: var(--pad); margin-bottom: 14px; }
 
-/* Empty state — editorial hero. Borrowed from the Medscope mock: a calm,
+/* Empty state, editorial hero. Borrowed from the Medscope mock: a calm,
    centered, magazine-style headline with a serif-italic accent, framed by
    a small mono context strip and a measured paragraph of body copy. */
 .empty {
@@ -519,7 +519,7 @@ mark {
   animation: hero-rise 0.36s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
-/* "Run differential" CTA — small forward-momentum bump on click so the
+/* "Run differential" CTA, small forward-momentum bump on click so the
    user sees their action acknowledged before the pipeline mounts. */
 @keyframes cta-acknowledge {
   0%   { transform: scale(1); }
@@ -606,7 +606,7 @@ mark {
 .timeline__item[data-status="running"] { opacity: 1; }
 .timeline__item[data-status="done"] { opacity: 0.85; }
 
-/* Subtle "stage just arrived" pulse — fires on the row whose data
+/* Subtle "stage just arrived" pulse, fires on the row whose data
    transitions from estimated (no ms shown) to real (ms shown). The
    transition is purely from the data-status change and the existing
    opacity transition; this adds a single-shot accent flash. */
@@ -753,7 +753,7 @@ mark {
   border: 1px solid var(--border);
 }
 
-/* ---------- CHIPS — interactive variants ---------- */
+/* ---------- CHIPS, interactive variants ---------- */
 .chip--clickable { cursor: pointer; transition: background 0.12s; }
 .chip--clickable:hover {
   background: oklch(from var(--accent-soft) calc(l - 0.02) c h);
@@ -808,7 +808,7 @@ mark {
   to   { opacity: 1; transform: none; }
 }
 
-/* ---------- MODAL (chip → AI explain) ---------- */
+/* ---------- MODAL (chip to AI explain) ---------- */
 .modal-backdrop {
   position: fixed; inset: 0;
   background: oklch(0.2 0.01 250 / 0.35);
@@ -1034,7 +1034,7 @@ mark {
   white-space: pre-wrap;
 }
 
-/* Inspector narration line — one factual sentence per stage. Appears as
+/* Inspector narration line, one factual sentence per stage. Appears as
    the first thing inside an opened panel. */
 .inspector__narration {
   display: flex; align-items: flex-start; gap: 8px;
@@ -1097,7 +1097,7 @@ mark {
   color: var(--ink-2);
 }
 
-/* Synonym mappings — token → synonym list with arrow ink-in. */
+/* Synonym mappings, token to synonym list with arrow ink-in. */
 .syn-list {
   list-style: none; padding: 0; margin: 0;
   display: grid; gap: 6px;

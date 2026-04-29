@@ -48,16 +48,16 @@ interface Props {
 // While running we don't know the real stages yet. Show these placeholders
 // that approximate what's about to happen; once trace arrives we replace.
 const ESTIMATED_STAGES: { key: string; label: string; caption: string; est_ms: number }[] = [
-  { key: "build_query",     label: "Build query string",   caption: "Symptoms → natural-language probe",                est_ms: 30 },
+  { key: "build_query",     label: "Build query string",   caption: "Symptoms to natural-language probe",                est_ms: 30 },
   { key: "expand_synonyms", label: "Synonym expansion",    caption: "UMLS-style clinical terms appended",               est_ms: 30 },
-  { key: "encode",          label: "Encode query",         caption: "Azure OpenAI text-embedding-3-large → 3072d",      est_ms: 700 },
-  { key: "vector_search",   label: "Vector search",        caption: "Pinecone 255-data-mining · top-30 cosine",         est_ms: 600 },
+  { key: "encode",          label: "Encode query",         caption: "Azure OpenAI text-embedding-3-large to 3072d",      est_ms: 700 },
+  { key: "vector_search",   label: "Vector search",        caption: "Pinecone 255-data-mining, top-30 cosine",         est_ms: 600 },
   { key: "attribute",       label: "Disease attribution",  caption: "Match passages to 41 Kaggle classes",              est_ms: 50 },
   { key: "related",         label: "Related context",      caption: "Top-5 nearby passages",                            est_ms: 200 },
   { key: "mining",          label: "Mining scorer",        caption: "FP-Growth: 23,839 rules",                          est_ms: 30 },
   { key: "fuse",            label: "Hybrid fusion",        caption: "Linear combine of mining + retrieval",             est_ms: 10 },
-  { key: "evidence",        label: "Evidence cards",       caption: "Claim-level extraction · tier sort",               est_ms: 50 },
-  { key: "explain",         label: "Clinical explanation", caption: "GPT-5.3 · 4-section JSON · citations",             est_ms: 5000 },
+  { key: "evidence",        label: "Evidence cards",       caption: "Claim-level extraction, tier sort",               est_ms: 50 },
+  { key: "explain",         label: "Clinical explanation", caption: "GPT-5.3, 4-section JSON, citations",             est_ms: 5000 },
 ];
 
 // Per-stage visual budget for the auto-walkthrough. Most signature
@@ -85,7 +85,7 @@ export function PipelineTimeline(p: Props) {
   // Multiple stages can be expanded at once now. Walkthrough pops them
   // open in sequence; manual click toggles individual stages.
   const [openKeys, setOpenKeys] = useState<Set<string>>(new Set());
-  // Per-stage runId — bumps when a stage gets reopened so its animation
+  // Per-stage runId, bumps when a stage gets reopened so its animation
   // hooks replay. Indexed by stage key.
   const [openIds, setOpenIds] = useState<Record<string, number>>({});
 
@@ -103,7 +103,7 @@ export function PipelineTimeline(p: Props) {
     if (p.state !== "running") return;
     setActiveIdx(0);
     setElapsed(0);
-    // Fresh request — clear any previously expanded panels.
+    // Fresh request, clear any previously expanded panels.
     setOpenKeys(new Set());
     setOpenIds({});
     setPlayingIdx(-1);
@@ -245,8 +245,8 @@ export function PipelineTimeline(p: Props) {
 
   const isDone = p.state === "done";
   // Build the stage list. Three cases:
-  //   - 'running' with no streamed trace yet → all estimates.
-  //   - streaming or done with real trace → real stages first, then any
+  //   - 'running' with no streamed trace yet to all estimates.
+  //   - streaming or done with real trace to real stages first, then any
   //     remaining estimated rows for stages that haven't arrived yet.
   //     Lets the user see the full pipeline shape even mid-stream.
   const stages: {
@@ -289,13 +289,13 @@ export function PipelineTimeline(p: Props) {
             <span className="count">
               {isDone
                 ? playingIdx >= 0 && p.trace
-                  ? `walkthrough · stage ${playingIdx + 1} of ${p.trace.length} · real time ${(totalReal ?? 0).toFixed(0)}ms`
-                  : `completed · ${(totalReal ?? 0).toFixed(0)}ms · click any stage to inspect`
-                : `running · ${(elapsed / 1000).toFixed(1)}s`}
+                  ? `walkthrough, stage ${playingIdx + 1} of ${p.trace.length}, real time ${(totalReal ?? 0).toFixed(0)}ms`
+                  : `completed, ${(totalReal ?? 0).toFixed(0)}ms, click any stage to inspect`
+                : `running, ${(elapsed / 1000).toFixed(1)}s`}
             </span>
           </div>
         </div>
-        {/* Walkthrough controls — visible after a response lands */}
+        {/* Walkthrough controls, visible after a response lands */}
         {isDone && p.trace && p.trace.length > 0 && (
           <div className="timeline__controls">
             {playingIdx >= 0 ? (
@@ -381,7 +381,7 @@ export function PipelineTimeline(p: Props) {
                   className="timeline__row"
                   onClick={() => {
                     if (!expandable) return;
-                    // Manual click cancels the walkthrough — the user has
+                    // Manual click cancels the walkthrough, the user has
                     // taken over.
                     setPlayingIdx(-1);
                     setOpenKeys((cur) => {
@@ -586,7 +586,7 @@ function BuildQueryInspector({
   );
 }
 
-// Synonym expansion: arrow draws from token → synonym, staggered.
+// Synonym expansion: arrow draws from token to synonym, staggered.
 function ExpandSynonymsInspector({
   data,
   ms,
@@ -597,13 +597,13 @@ function ExpandSynonymsInspector({
   runId: number;
 }) {
   const entries = Object.entries((data.applied ?? {}) as Record<string, string[]>);
-  // Hooks must run in stable order — call before any early-return.
+  // Hooks must run in stable order, call before any early-return.
   const visible = useStaggeredReveal(entries.length, 160, runId);
   if (entries.length === 0) {
     return (
       <div className="inspector">
         <StageNarration>
-          Synonym expansion was off — the probe passed through unchanged.
+          Synonym expansion was off, the probe passed through unchanged.
         </StageNarration>
       </div>
     );
@@ -613,7 +613,7 @@ function ExpandSynonymsInspector({
     <div className="inspector">
       <StageNarration>
         Mapped {entries.length} symptom token{entries.length === 1 ? "" : "s"} to{" "}
-        {totalSyns} clinical synonym{totalSyns === 1 ? "" : "s"} in {fmtMs(ms)} ·
+        {totalSyns} clinical synonym{totalSyns === 1 ? "" : "s"} in {fmtMs(ms)} , 
         probe length grew by {data.delta_chars} chars.
       </StageNarration>
       <Field label="Mappings applied">
@@ -627,7 +627,7 @@ function ExpandSynonymsInspector({
             >
               <span className="syn-row__from mono">{k}</span>
               <span className="syn-row__arrow" aria-hidden>
-                →
+                to
               </span>
               <span className="syn-row__to">{v.join(", ")}</span>
             </li>
@@ -681,7 +681,7 @@ function VectorChip({
   delay: number;
 }) {
   // Stagger by re-keying on (runId, delay) so each chip starts at its
-  // own offset — gives the cascade effect.
+  // own offset, gives the cascade effect.
   const [armed, setArmed] = useState(false);
   useEffect(() => {
     setArmed(false);
@@ -757,7 +757,7 @@ function VectorSearchInspector({
         </table>
       </Field>
       {matches.length > 1 && (
-        <Field label="Cosine score fall-off · top-K">
+        <Field label="Cosine score fall-off, top-K">
           <div className="inspector__chart">
             <ResponsiveContainer width="100%" height={120}>
               <LineChart
@@ -828,7 +828,7 @@ function AttributeInspector({
   // contributed at least one passage to the top-30. We pull the counts
   // from /insights and intersect with the sources we observed in this
   // request's sample. (Truthfully, the trace only carries 8 sample rows
-  // but the full set is in data.top_matches up the stack — for now, just
+  // but the full set is in data.top_matches up the stack, for now, just
   // intersect with the unique sources visible.)
   const sourceCounts = (insights?.source_distribution ?? []).slice(0, 6);
   return (
@@ -967,7 +967,7 @@ function RelatedInspector({ data, ms, runId }: { data: any; ms: number; runId: n
     <div className="inspector">
       <StageNarration>
         Pulled {items.length} nearby passages in {fmtMs(ms)} for the "Related context"
-        rail at the bottom of the page — these aren't required to map to a disease.
+        rail at the bottom of the page, these aren't required to map to a disease.
       </StageNarration>
       <Field label="Top-5 nearby passages">
         <table className="inspector__table inspector__table--anim">
@@ -1014,7 +1014,7 @@ function MiningInspector({
   const visible = useStaggeredReveal(rules.length, 160, runId);
   // For each disease that fired, look up its total rule count in the
   // mined-rules table (top-25 only, so coverage is 'best-effort'). Lets
-  // the demo viewer see WHY a disease scored well — strong rule coverage.
+  // the demo viewer see WHY a disease scored well, strong rule coverage.
   const firedDiseaseSlugs = new Set(
     rules.map((r) => (r.disease as string).replace(/_/g, " "))
   );
@@ -1053,13 +1053,13 @@ function MiningInspector({
               >
                 <span className="rule-row__ante mono">{`{${r.antecedent.join(", ")}}`}</span>
                 <span className="rule-row__arrow" aria-hidden>
-                  →
+                  to
                 </span>
                 <span className="rule-row__disease">
                   {r.disease.replace(/_/g, " ")}
                 </span>
                 <span className="rule-row__stats mono">
-                  conf {r.confidence.toFixed(2)} · lift {r.lift.toFixed(1)} ·
+                  conf {r.confidence.toFixed(2)}, lift {r.lift.toFixed(1)} , 
                   score {r.score.toFixed(2)}
                 </span>
               </li>
@@ -1107,7 +1107,7 @@ function MiningInspector({
             </ResponsiveContainer>
           </div>
           <p className="inspector__chart-caption">
-            More rules ≠ better — but a disease with no rules can't fire here.
+            More rules ≠ better, but a disease with no rules can't fire here.
             Coverage skew is one reason the headline metric is fused, not
             mining-only.
           </p>
@@ -1135,7 +1135,7 @@ function FuseInspector({
     <div className="inspector">
       <StageNarration>
         Combined the two signals via{" "}
-        <code>FusedScore = α·retrieval + (1-α)·mining</code> with α=
+        <code>FusedScore = α, retrieval + (1-α), mining</code> with α=
         {Number(data.alpha).toFixed(2)} in {fmtMs(ms)}. Top match:{" "}
         <em>{candidates[0]?.disease.replace(/_/g, " ")}</em> at{" "}
         {candidates[0]?.fused_score.toFixed(3)}.
@@ -1161,7 +1161,7 @@ function FuseInspector({
           ))}
         </ul>
       </Field>
-      <Field label="This case · ranking under different α settings">
+      <Field label="This case, ranking under different α settings">
         <div className="inspector__chart">
           <table className="inspector__table" style={{ marginTop: 0 }}>
             <thead>
@@ -1174,10 +1174,10 @@ function FuseInspector({
             </thead>
             <tbody>
               {[
-                { a: 0.0, label: "0.00 — mining-only" },
-                { a: 0.3, label: "0.30 — fused (default)" },
-                { a: 0.5, label: "0.50 — balanced" },
-                { a: 1.0, label: "1.00 — retrieval-only" },
+                { a: 0.0, label: "0.00, mining-only" },
+                { a: 0.3, label: "0.30, fused (default)" },
+                { a: 0.5, label: "0.50, balanced" },
+                { a: 1.0, label: "1.00, retrieval-only" },
               ].map(({ a, label }) => {
                 const ranked = [...candidates]
                   .map((c: any) => ({
@@ -1208,7 +1208,7 @@ function FuseInspector({
         </p>
       </Field>
       {insights && insights.alpha_sweep.length > 0 && (
-        <Field label="α-sweep · why we ship α=0.30">
+        <Field label="α-sweep, why we ship α=0.30">
           <div className="inspector__chart">
             <ResponsiveContainer width="100%" height={150}>
               <LineChart
@@ -1364,8 +1364,8 @@ function CrossEncoderInspector({
               >
                 <td>{c.disease.replace(/_/g, " ")}</td>
                 <td className="mono">{c.k}</td>
-                <td className="mono">{c.top_before?.slice(0, 8) ?? "—"}…</td>
-                <td className="mono">{c.top_after?.slice(0, 8) ?? "—"}…</td>
+                <td className="mono">{c.top_before?.slice(0, 8) ?? ", "}…</td>
+                <td className="mono">{c.top_after?.slice(0, 8) ?? ", "}…</td>
               </tr>
             ))}
           </tbody>
@@ -1423,19 +1423,19 @@ function EvidenceInspector({ data, ms, runId }: { data: any; ms: number; runId: 
               >
                 <td>{d.disease.replace(/_/g, " ")}</td>
                 <td className="mono">{d.n_cards}</td>
-                <td>{d.top_card?.source ?? "—"}</td>
+                <td>{d.top_card?.source ?? ", "}</td>
                 <td>
                   {d.top_card ? (
                     <span className={`pill pill--tier${d.top_card.tier}`}>
                       <span className="dot" />t{d.top_card.tier}
                     </span>
                   ) : (
-                    "—"
+                    ", "
                   )}
                 </td>
-                <td>{d.top_card?.passage_type ?? "—"}</td>
+                <td>{d.top_card?.passage_type ?? ", "}</td>
                 <td className="mono">
-                  {d.top_card ? d.top_card.specificity.toFixed(2) : "—"}
+                  {d.top_card ? d.top_card.specificity.toFixed(2) : ", "}
                 </td>
               </tr>
             ))}
@@ -1443,7 +1443,7 @@ function EvidenceInspector({ data, ms, runId }: { data: any; ms: number; runId: 
         </table>
       </Field>
       {sourceChartData.length > 0 && (
-        <Field label="Source distribution · selected top cards">
+        <Field label="Source distribution, selected top cards">
           <div className="inspector__chart">
             <ResponsiveContainer width="100%" height={130}>
               <BarChart
@@ -1586,7 +1586,7 @@ function ExplainInspector({
                           : { color: "var(--ink-4)" }
                       }
                     >
-                      {thisRun !== undefined ? `${thisRun.toFixed(0)}ms` : "—"}
+                      {thisRun !== undefined ? `${thisRun.toFixed(0)}ms` : ", "}
                     </td>
                   </tr>
                 );
@@ -1597,8 +1597,8 @@ function ExplainInspector({
             Headline benchmark uses MiniLM + FAISS + the deterministic
             template explainer (n=100 queries). When the explainer is the
             OpenAI structured one (especially against gpt-5-class
-            reasoning models), the explain stage is 50–100× the template
-            baseline — that's the cost of going from stitch to LLM.
+            reasoning models), the explain stage is 50-100× the template
+            baseline, that's the cost of going from stitch to LLM.
           </p>
         </Field>
       )}
@@ -1624,7 +1624,7 @@ function Field({
 // Counts up the right-margin ms when its parent row opens, in roughly the
 // same wall-clock window as the signature animation. The duration is
 // proportional to the value so a 700ms stage takes longer to count up
-// than a 1ms stage — the eye reads "this took longer" naturally.
+// than a 1ms stage, the eye reads "this took longer" naturally.
 function MsCounter({
   target,
   runId,

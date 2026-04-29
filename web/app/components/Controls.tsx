@@ -126,7 +126,7 @@ export function Controls(p: Props) {
                 <option key={b} value={b}>
                   {b}
                   {b === "azure-openai" && pineconeMode
-                    ? " · pinecone (3072d)"
+                    ? ", pinecone (3072d)"
                     : ""}
                 </option>
               ))}
@@ -157,7 +157,7 @@ export function Controls(p: Props) {
             </div>
             <div
               className="slider-row"
-              title="0 = mining-only · 1 = retrieval-only · default 0.30 (alpha-sweep optimum)"
+              title="0 = mining-only, 1 = retrieval-only, default 0.30 (alpha-sweep optimum)"
             >
               <input
                 type="range"
@@ -172,13 +172,13 @@ export function Controls(p: Props) {
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--ink-4)", marginTop: 4 }}>
               <span>← Mining</span>
-              <span>Retrieval →</span>
+              <span>Retrieval to</span>
             </div>
           </div>
 
           <label
             className="checkbox"
-            title="Map symptom tokens to clinical synonyms before encoding (muscle_pain → myalgia, …)"
+            title="Map symptom tokens to clinical synonyms before encoding (muscle_pain to myalgia, …)"
           >
             <input
               type="checkbox"
@@ -274,7 +274,7 @@ export function Controls(p: Props) {
               </option>
               {p.sources.map((s) => (
                 <option key={s.source_id} value={s.source_id}>
-                  {s.label} · {s.count.toLocaleString()} passages
+                  {s.label}, {s.count.toLocaleString()} passages
                 </option>
               ))}
             </select>

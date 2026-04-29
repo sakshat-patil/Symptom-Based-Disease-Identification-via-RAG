@@ -68,7 +68,7 @@ def _short_quote(text: str, max_words: int = 22) -> str:
 
 
 def _citation_str(card: EvidenceCard) -> str:
-    return f"[{card.source_label} · {card.passage_id}]"
+    return f"[{card.source_label}, {card.passage_id}]"
 
 
 # --- template explainer ----------------------------------------------------
