@@ -126,8 +126,8 @@ def build():
         "Sakshat Nandkumar Patil (SJSU 018318287), "
         "Vineet Kumar (SJSU 019140433), "
         "Aishwarya Madhave (SJSU 019129110)<br/>"
-        "<i>Department of Computer Engineering, San Jos&eacute; State University, "
-        "San Jos&eacute;, CA</i><br/>"
+        "<i>Department of Computer Engineering, San Jose State University, "
+        "San Jose, CA</i><br/>"
         "{sakshat.patil, vineet.kumar, aishwarya.madhave}@sjsu.edu<br/>"
         "<font size=8>CMPE 255 Data Mining (Spring 2026). All three authors are "
         "enrolled in the course; no external collaborators.</font>",
@@ -138,28 +138,29 @@ def build():
     story.append(Paragraph("Abstract", s["abs_label"]))
     story.append(Paragraph(
         "We present a hybrid clinical decision-support pipeline that ranks "
-        "likely diseases from a patient's symptom set and grounds each "
-        "prediction in biomedical literature. The mining half applies "
-        "FP-Growth to a 4,920-row patient transaction table covering 41 "
-        "diseases to extract high-confidence {symptom set} to disease "
-        "association rules. The retrieval half encodes the 24,063-passage "
-        "MedQuAD biomedical Q&amp;A corpus into a vector index (FAISS for "
-        "offline operation, Pinecone Serverless for the production demo) "
-        "with three interchangeable encoders: MiniLM-L6 (384d), "
-        "PubMedBERT (768d), and Azure OpenAI text-embedding-3-large (3072d). "
-        "We bridge the training and retrieval vocabulary gap with a "
-        "curated UMLS-style synonym dictionary. A linear fusion layer "
-        "combines the two signals via FusedScore(d) = a*RetrievalSim(d) "
-        "+ (1-a)*MiningConf(d). On 200 synthetic test cases, the best "
-        "fused configuration (MiniLM with synonym expansion, a=0.3) achieves "
-        "Recall@1 of 82.5%, Recall@10 of 89.5%, and MRR of 0.857, exceeding "
-        "the mining-only baseline (Recall@1 of 79%) by 3.5 percentage points. "
-        "The system ships as a three-tier application: a Next.js 14 web "
-        "frontend, a FastAPI inference microservice, and a Pinecone-backed "
-        "vector tier. For every ranked diagnosis the UI displays the "
-        "matching FP-Growth rule, claim-level highlights from the "
-        "retrieved MedQuAD passages, and a four-section structured "
-        "clinical explanation, making every prediction auditable.",
+        "candidate diseases from a patient's symptom set and grounds every "
+        "prediction in citable biomedical evidence. FP-Growth mining over "
+        "a 4,920-row, 41-disease patient transaction table yields 23,839 "
+        "{symptom set} to disease association rules. Dense retrieval over "
+        "24,063 MedQuAD passages, with three interchangeable encoders "
+        "(MiniLM 384d, PubMedBERT 768d, Azure OpenAI text-embedding-3-large "
+        "3072d) and a curated 130-entry clinical synonym dictionary, "
+        "supplies the literature side. A one-parameter linear fusion "
+        "FusedScore(d) = a*RetrievalSim(d) + (1-a)*MiningConf(d) combines "
+        "the two. On 200 held-out synthetic cases the best fused "
+        "configuration (MiniLM + synonyms, a=0.3) reaches "
+        "<b>Recall@1 = 0.825</b>, <b>Recall@10 = 0.895</b>, and "
+        "<b>MRR = 0.857</b>, exceeding the strong mining-only baseline "
+        "(R@1 = 0.790) by 3.5 percentage points; an alpha sweep shows the "
+        "metric plateaus on [0.1, 0.4] and collapses for a &ge; 0.7. The "
+        "system ships as three tiers (Next.js 14 web client, FastAPI "
+        "inference service, FAISS or Pinecone Serverless vector store) "
+        "and runs end-to-end at 12 ms mean / 20 ms p95 on the offline "
+        "path. Every ranked diagnosis is paired with the matching "
+        "FP-Growth rule, claim-level sentence highlights from the "
+        "retrieved passages with NIH source-tier badges, and a "
+        "four-section structured clinical explanation, making every "
+        "prediction auditable end-to-end.",
         s["abstract"]))
 
     def H(t): story.append(Paragraph(t, s["h1"]))
@@ -473,6 +474,38 @@ def build():
 
     H("6. Results")
 
+    # Headline-metrics callout: a compact, visually distinct stat row.
+    callout = Table([
+        ["R@1", "R@10", "MRR", "p95 latency"],
+        ["0.825", "0.895", "0.857", "20 ms"],
+        ["+3.5 vs. mining", "+2.5 vs. mining", "+2.8 vs. mining",
+         "M3 Pro, default"],
+    ], colWidths=[0.75 * inch, 0.75 * inch, 0.75 * inch, 0.85 * inch])
+    callout.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 7),
+        ("FONTNAME", (0, 1), (-1, 1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 1), (-1, 1), 14),
+        ("FONTSIZE", (0, 2), (-1, 2), 6.5),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0d3b66")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#eef2ff")),
+        ("TEXTCOLOR", (0, 1), (-1, 1), colors.HexColor("#0d3b66")),
+        ("TEXTCOLOR", (0, 2), (-1, 2), colors.HexColor("#6b7280")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#0d3b66")),
+        ("LINEBELOW", (0, 1), (-1, 1), 0.3,
+         colors.HexColor("#cbd5e1")),
+    ]))
+    story.append(callout)
+    story.append(Paragraph(
+        "Headline numbers: best fused variant (MiniLM, synonym "
+        "expansion on, a=0.3) on 200 held-out synthetic cases.",
+        s["caption"]))
+
     h("6.1 Ablation Study")
     story.append(make_table([
         ["Variant", "Mode", "R@1", "R@5", "R@10", "MRR"],
@@ -612,6 +645,27 @@ def build():
                       "ranks first in both lanes, with different fused "
                       "scores (0.832 and 0.700).", s, aspect=1.0)
 
+    h("6.7 Production Demo: Azure OpenAI + Pinecone")
+    P("Beyond the offline FAISS path used for the headline numbers, the "
+      "system runs in a production configuration against Azure OpenAI "
+      "(<font face='Courier' size=8>text-embedding-3-large</font>, 3072d, "
+      "and <font face='Courier' size=8>truestar-gpt-5.3-chat</font>) and "
+      "Pinecone Serverless (<font face='Courier' size=8>255-data-mining"
+      "</font> index, 24,063 vectors, AWS us-east-1). On the Cardiac "
+      "event preset (chest_pain, breathlessness, sweating, vomiting), "
+      "<b>Heart Attack ranks #1 with fused score 0.831</b> "
+      "(MiningConf = 1.000, RetrievalSim = 0.439). Exactly four of the "
+      "41 disease classes receive any retrieval signal, which matches "
+      "the differential a clinician would consider for these symptoms. "
+      "One MedlinePlus tier-1 evidence card surfaces with a "
+      "claim-highlighted sentence. The structured GPT-5.3 explainer "
+      "produces the four-section explanation in 3 to 6 seconds; the "
+      "deterministic template explainer produces a citation-faithful "
+      "fallback in under 1 ms when the LLM call is disabled or fails. "
+      "Dimension mismatches (e.g., querying a 3072d Pinecone index with "
+      "PubMedBERT 768d embeddings) are caught by an explicit guard in "
+      "the FastAPI service and surfaced as a clean HTTP 400 to the UI.")
+
     H("7. Discussion and Limitations")
     P("<b>Synthetic evaluation.</b> All 200 test cases come from the same "
       "transaction table as the training data; real clinical queries will "
@@ -648,7 +702,7 @@ def build():
 
     H("Author Contributions and Source Code")
     P("All three authors are enrolled in CMPE 255 Spring 2026 at San "
-      "Jos&eacute; State University.")
+      "Jose State University.")
     P("<b>Sakshat Nandkumar Patil</b> (SJSU 018318287). Data ETL "
       "for the Kaggle-style transaction table and the Synthea FHIR "
       "pipeline; FP-Growth mining and threshold tuning; mining-side "

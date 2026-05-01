@@ -173,29 +173,29 @@ def build() -> None:
     add_h1(doc, "Abstract")
     add_p(doc,
           "We present a hybrid clinical decision-support pipeline that ranks "
-          "likely diseases from a patient's symptom set and grounds each "
-          "prediction in biomedical literature. The mining half applies "
-          "FP-Growth to a 4,920-row patient transaction table covering 41 "
-          "diseases to extract high-confidence {symptom set} to disease "
-          "association rules. The retrieval half encodes the 24,063-passage "
-          "MedQuAD biomedical Q&A corpus into a vector index (FAISS for "
-          "offline operation, Pinecone Serverless for the production demo) "
-          "with three interchangeable encoders: MiniLM-L6 (384d), "
-          "PubMedBERT (768d), and Azure OpenAI text-embedding-3-large "
-          "(3072d). We bridge the training and retrieval vocabulary gap "
-          "with a curated UMLS-style synonym dictionary. A linear fusion "
-          "layer combines the two signals via "
-          "FusedScore(d) = a*RetrievalSim(d) + (1-a)*MiningConf(d). On 200 "
-          "synthetic test cases, the best fused configuration (MiniLM with "
-          "synonym expansion, a=0.3) achieves Recall@1 of 82.5%, Recall@10 "
-          "of 89.5%, and MRR of 0.857, exceeding the mining-only baseline "
-          "(Recall@1 of 79%) by 3.5 percentage points. The system ships as "
-          "a three-tier application: a Next.js 14 web frontend, a FastAPI "
-          "inference microservice, and a Pinecone-backed vector tier. For "
-          "every ranked diagnosis the UI displays the matching FP-Growth "
-          "rule, claim-level highlights from the retrieved MedQuAD "
-          "passages, and a four-section structured clinical explanation, "
-          "making every prediction auditable.")
+          "candidate diseases from a patient's symptom set and grounds every "
+          "prediction in citable biomedical evidence. FP-Growth mining over "
+          "a 4,920-row, 41-disease patient transaction table yields 23,839 "
+          "{symptom set} to disease association rules. Dense retrieval over "
+          "24,063 MedQuAD passages, with three interchangeable encoders "
+          "(MiniLM 384d, PubMedBERT 768d, Azure OpenAI text-embedding-3-large "
+          "3072d) and a curated 130-entry clinical synonym dictionary, "
+          "supplies the literature side. A one-parameter linear fusion "
+          "FusedScore(d) = a*RetrievalSim(d) + (1-a)*MiningConf(d) combines "
+          "the two. On 200 held-out synthetic cases the best fused "
+          "configuration (MiniLM + synonyms, a=0.3) reaches "
+          "[b]Recall@1 = 0.825[/b], [b]Recall@10 = 0.895[/b], and "
+          "[b]MRR = 0.857[/b], exceeding the strong mining-only baseline "
+          "(R@1 = 0.790) by 3.5 percentage points; an alpha sweep shows the "
+          "metric plateaus on [0.1, 0.4] and collapses for a >= 0.7. The "
+          "system ships as three tiers (Next.js 14 web client, FastAPI "
+          "inference service, FAISS or Pinecone Serverless vector store) "
+          "and runs end-to-end at 12 ms mean / 20 ms p95 on the offline "
+          "path. Every ranked diagnosis is paired with the matching "
+          "FP-Growth rule, claim-level sentence highlights from the "
+          "retrieved passages with NIH source-tier badges, and a "
+          "four-section structured clinical explanation, making every "
+          "prediction auditable end-to-end.")
 
     # --- 1. Introduction ---
     add_h1(doc, "1. Introduction")
@@ -516,6 +516,17 @@ def build() -> None:
     # --- 6. Results ---
     add_h1(doc, "6. Results")
 
+    # Headline-metrics callout: 4-stat row before the ablation.
+    add_table(doc, [
+        ["R@1", "R@10", "MRR", "p95 latency"],
+        ["0.825", "0.895", "0.857", "20 ms"],
+        ["+3.5 vs. mining", "+2.5 vs. mining", "+2.8 vs. mining",
+         "M3 Pro, default"],
+    ])
+    add_caption(doc,
+                "Headline numbers: best fused variant (MiniLM, synonym "
+                "expansion on, a=0.3) on 200 held-out synthetic cases.")
+
     add_h2(doc, "6.1 Ablation Study")
     add_table(doc, [
         ["Variant", "Mode", "R@1", "R@5", "R@10", "MRR"],
@@ -646,6 +657,28 @@ def build() -> None:
                 "(768d) Pinecone indexes. Heart Attack ranks first in "
                 "both lanes, with different fused scores (0.832 and "
                 "0.700).")
+
+    add_h2(doc, "6.7 Production Demo: Azure OpenAI + Pinecone")
+    add_p(doc,
+          "Beyond the offline FAISS path used for the headline numbers, "
+          "the system runs in a production configuration against Azure "
+          "OpenAI (`text-embedding-3-large`, 3072d, and "
+          "`truestar-gpt-5.3-chat`) and Pinecone Serverless "
+          "(`255-data-mining` index, 24,063 vectors, AWS us-east-1). On "
+          "the Cardiac event preset (chest_pain, breathlessness, "
+          "sweating, vomiting), [b]Heart Attack ranks #1 with fused "
+          "score 0.831[/b] (MiningConf = 1.000, RetrievalSim = 0.439). "
+          "Exactly four of the 41 disease classes receive any retrieval "
+          "signal, which matches the differential a clinician would "
+          "consider for these symptoms. One MedlinePlus tier-1 evidence "
+          "card surfaces with a claim-highlighted sentence. The "
+          "structured GPT-5.3 explainer produces the four-section "
+          "explanation in 3 to 6 seconds; the deterministic template "
+          "explainer produces a citation-faithful fallback in under 1 ms "
+          "when the LLM call is disabled or fails. Dimension mismatches "
+          "(e.g., querying a 3072d Pinecone index with PubMedBERT 768d "
+          "embeddings) are caught by an explicit guard in the FastAPI "
+          "service and surfaced as a clean HTTP 400 to the UI.")
 
     # --- 7. Discussion and Limitations ---
     add_h1(doc, "7. Discussion and Limitations")
