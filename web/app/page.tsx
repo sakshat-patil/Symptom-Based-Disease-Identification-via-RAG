@@ -1,586 +1,790 @@
 "use client";
-import { useEffect, useState } from "react";
-import {
-  api,
-  ConfigDTO,
-  DiagnoseRequest,
-  DiagnoseResponse,
-  InsightsResponse,
-  PipelineStage,
-  SourceDTO,
-} from "./api";
-import { SymptomPicker } from "./components/SymptomPicker";
-import { Controls } from "./components/Controls";
-import { DiagnosisCard } from "./components/DiagnosisCard";
-import { RelatedContextPanel } from "./components/RelatedContext";
-import { LatencyStrip } from "./components/LatencyStrip";
-import { PipelineTimeline } from "./components/PipelineTimeline";
-import { DifferentialSummary } from "./components/DifferentialSummary";
+
 import Link from "next/link";
-import { Icon } from "./components/Icon";
+import { useEffect, useRef, useState } from "react";
+import {
+  motion,
+  useInView,
+  useScroll,
+  useTransform,
+  type Variants,
+} from "framer-motion";
+import { useAuth } from "./components/AuthProvider";
+import { UserMenu } from "./components/UserMenu";
 
-export default function Home() {
-  const [config, setConfig] = useState<ConfigDTO | null>(null);
-  const [symptoms, setSymptoms] = useState<string[]>([]);
-  const [allSymptoms, setAllSymptoms] = useState<string[]>([]);
-  const [sources, setSources] = useState<SourceDTO[]>([]);
-  // Pre-fetched aggregates so the pipeline timeline can show inline charts
-  // (rule counts, source distribution, alpha sweep) without a second hop.
-  const [insights, setInsights] = useState<InsightsResponse | null>(null);
-
-  const [backend, setBackend] = useState("pubmedbert");
-  const [mode, setMode] = useState("fused");
-  const [alpha, setAlpha] = useState(0.3);
-  const [expandSyn, setExpandSyn] = useState(true);
-  const [crossEncoder, setCrossEncoder] = useState(false);
-  const [explainer, setExplainer] = useState("template");
-  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
-  const [passageTypeFilter, setPassageTypeFilter] = useState<string | null>(null);
-  // Retrieval-tuning knobs. Defaults match the headline-paper numbers.
-  const [topKRetrieval, setTopKRetrieval] = useState(30);
-  const [relatedTopK, setRelatedTopK] = useState(5);
-  const [maxEvidenceCards, setMaxEvidenceCards] = useState(5);
-
-  const [resp, setResp] = useState<DiagnoseResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // Stages the SSE endpoint has emitted so far. Drained progressively as
-  // the streamed diagnose runs. The timeline's walkthrough engine reads
-  // from this list and animates each stage as it arrives.
-  const [streamStages, setStreamStages] = useState<PipelineStage[]>([]);
-
-  // Side-by-side compare mode. When on, /diagnose/stream gets fired twice
-  // in parallel, one against azure-openai (3072d Pinecone) and one
-  // against pubmedbert (768d Pinecone). Each lane keeps its own state.
-  const [compareMode, setCompareMode] = useState(false);
-  const [respB, setRespB] = useState<DiagnoseResponse | null>(null);
-  const [loadingB, setLoadingB] = useState(false);
-  const [streamStagesB, setStreamStagesB] = useState<PipelineStage[]>([]);
-  const [errorB, setErrorB] = useState<string | null>(null);
-  // True for ~220ms between Diagnose-click and loading=true so the empty
-  // hero gets a clean exit animation before the pipeline timeline mounts.
-  const [heroExiting, setHeroExiting] = useState(false);
-
+/**
+ * Public landing page. Calm-but-polished AI-research-lab voice. Animation
+ * budget is intentionally restrained: a hero word-stagger, on-view stat
+ * counters, scroll-revealed sections, and hover lift on feature cards.
+ * No constant motion noise; one moment of magic per fold.
+ */
+export default function Landing() {
+  const { user, loading } = useAuth();
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
-  // Apply theme to <html>
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
-  // Keep backend valid for the current vector store + mode. In Pinecone mode
-  // (3072d index) only azure-openai works for retrieval; mining-only is fine
-  // with anything because retrieval is skipped.
-  useEffect(() => {
-    if (!config) return;
-    if (
-      config.vector_store === "pinecone" &&
-      mode !== "mining-only" &&
-      backend !== "azure-openai" &&
-      config.backends.includes("azure-openai")
-    ) {
-      setBackend("azure-openai");
-    }
-  }, [config, mode, backend]);
+  return (
+    <div className="landing">
+      <LandingTopbar
+        theme={theme}
+        setTheme={setTheme}
+        user={user}
+        loading={loading}
+      />
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [cfg, syms, src, ins] = await Promise.all([
-          api.config(),
-          api.symptoms(),
-          api.sources(),
-          api.insights().catch(() => null),
-        ]);
-        setConfig(cfg);
-        setAllSymptoms(syms.symptoms);
-        setSources(src.sources);
-        setInsights(ins);
-        setExplainer(cfg.explainers[0] ?? "template");
-        setAlpha(cfg.default_alpha ?? 0.3);
-        if (
-          cfg.vector_store === "pinecone" &&
-          cfg.backends.includes("azure-openai")
-        ) {
-          setBackend("azure-openai");
-        }
-      } catch (e: any) {
-        setError(`Could not reach API: ${e.message}`);
-      }
-    })();
-  }, []);
+      <Hero authed={Boolean(user)} />
 
-  async function runDiagnose() {
-    if (!symptoms.length) return;
-    setError(null);
-    setErrorB(null);
-    // Hero exit choreography on first run.
-    if (!resp && !respB) {
-      setHeroExiting(true);
-      await new Promise((r) => setTimeout(r, 220));
-      setHeroExiting(false);
-    }
-    setLoading(true);
-    setResp(null);
-    setStreamStages([]);
+      <MetricsRow />
 
-    // Build the base request shape; lane-specific overrides applied below.
-    const baseReq: Omit<DiagnoseRequest, "backend"> = {
-      symptoms,
-      mode,
-      alpha,
-      expand_synonyms: expandSyn,
-      cross_encoder: crossEncoder,
-      explainer,
-      source_filter: sourceFilter,
-      passage_type_filter: passageTypeFilter,
-      top_n: 5,
-      top_k_retrieval: topKRetrieval,
-      related_top_k: relatedTopK,
-      max_evidence_cards: maxEvidenceCards,
-      trace: true,
-    };
+      <HowItWorks />
 
-    // Lane A, uses the user's currently selected backend. In compare
-    // mode this is forced to azure-openai so the two lanes are comparable
-    // (azure-openai vs pubmedbert).
-    const laneABackend = compareMode ? "azure-openai" : backend;
-    const reqA: DiagnoseRequest = { ...baseReq, backend: laneABackend };
+      <Auditable />
 
-    const streamA = api.diagnoseStream(reqA, {
-      onStage: (s) => setStreamStages((cur) => [...cur, s]),
-      onComplete: (full) => {
-        setResp(full);
-        setLoading(false);
-      },
-      onError: (msg) => {
-        setError(msg);
-        setLoading(false);
-      },
-    });
+      <FinalCta authed={Boolean(user)} />
 
-    // Lane B only fires in compare mode.
-    let streamB: Promise<void> | null = null;
-    if (compareMode) {
-      setLoadingB(true);
-      setRespB(null);
-      setStreamStagesB([]);
-      const reqB: DiagnoseRequest = { ...baseReq, backend: "pubmedbert" };
-      streamB = api.diagnoseStream(reqB, {
-        onStage: (s) => setStreamStagesB((cur) => [...cur, s]),
-        onComplete: (full) => {
-          setRespB(full);
-          setLoadingB(false);
-        },
-        onError: (msg) => {
-          setErrorB(msg);
-          setLoadingB(false);
-        },
-      });
-    } else {
-      // Make sure no stale lane-B state is showing from a prior compare run.
-      setRespB(null);
-      setStreamStagesB([]);
-      setLoadingB(false);
-    }
+      <LandingFooter />
+    </div>
+  );
+}
 
-    try {
-      await Promise.all([streamA, streamB].filter(Boolean) as Promise<void>[]);
-    } catch (e: any) {
-      // Per-lane errors are reported via the onError callbacks; Promise.all
-      // surfaces only the first network-level failure.
-      setError((cur) => cur ?? e.message);
-      setLoading(false);
-      setLoadingB(false);
-    }
-  }
+/* =================================================================
+   TOPBAR
+   ================================================================= */
 
-  const maxScore = resp
-    ? Math.max(...resp.diagnoses.map((d) => d.fused_score), 0.001)
-    : 1;
+function LandingTopbar({
+  theme,
+  setTheme,
+  user,
+  loading,
+}: {
+  theme: "light" | "dark";
+  setTheme: (t: "light" | "dark") => void;
+  user: ReturnType<typeof useAuth>["user"];
+  loading: boolean;
+}) {
+  return (
+    <motion.header
+      className="landing__topbar"
+      initial={{ y: -8, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.4, ease: [0.2, 0.7, 0.2, 1] }}
+    >
+      <div className="landing__brand">
+        <div className="topbar__logo">R</div>
+        <div>
+          <div className="topbar__title">
+            Record-Based Medical Diagnostic Assistant
+          </div>
+          <div className="topbar__sub">
+            CMPE 255, San Jose State University
+          </div>
+        </div>
+      </div>
+      <div style={{ flex: 1 }} />
+      <button
+        className="icon-btn"
+        onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+        title="Toggle theme"
+        aria-label="Toggle theme"
+      >
+        {theme === "dark" ? "☀" : "☾"}
+      </button>
+      {!loading && user ? (
+        <>
+          <Link href="/app" className="btn btn--ghost">
+            Open app
+          </Link>
+          <UserMenu />
+        </>
+      ) : (
+        <div className="landing__auth-cta">
+          <Link href="/login" className="btn">
+            Sign in
+          </Link>
+          <Link href="/register" className="btn landing__btn-accent">
+            Get started
+          </Link>
+        </div>
+      )}
+    </motion.header>
+  );
+}
 
-  // status pill text
-  const statusBackend = resp?.used_backend ?? backend;
-  const statusVS = config?.vector_store ?? ", ";
-  const statusExp =
-    resp?.explainer_backend?.replace("openai:", "") ?? explainer;
+/* =================================================================
+   HERO
+   ================================================================= */
+
+const HEAD_TOP = "A symptom-first differential,";
+const HEAD_BOT_PRE = "with";
+const HEAD_BOT_EM = "citable evidence";
+const HEAD_BOT_POST = "behind every prediction.";
+
+function Hero({ authed }: { authed: boolean }) {
+  // Subtle parallax on the mesh background as the page scrolls.
+  const ref = useRef<HTMLElement | null>(null);
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ["start start", "end start"],
+  });
+  const meshY = useTransform(scrollYProgress, [0, 1], [0, 80]);
+  const meshOpacity = useTransform(scrollYProgress, [0, 1], [1, 0.35]);
+
+  const wordContainer: Variants = {
+    hidden: {},
+    show: {
+      transition: { staggerChildren: 0.045, delayChildren: 0.15 },
+    },
+  };
+  const word: Variants = {
+    hidden: { y: "0.6em", opacity: 0, filter: "blur(4px)" },
+    show: {
+      y: 0,
+      opacity: 1,
+      filter: "blur(0px)",
+      transition: { duration: 0.55, ease: [0.2, 0.7, 0.2, 1] },
+    },
+  };
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <div className="topbar__brand">
+    <section className="landing__hero" ref={ref}>
+      <motion.div
+        className="landing__hero-mesh"
+        style={{ y: meshY, opacity: meshOpacity }}
+        aria-hidden
+      />
+      <div className="landing__hero-grid" aria-hidden />
+
+      <motion.div
+        className="landing__hero-eyebrow"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.05 }}
+      >
+        <span className="landing__pulse" aria-hidden />
+        Live research preview · CMPE 255 final project
+      </motion.div>
+
+      <motion.h1
+        className="landing__hero-title"
+        variants={wordContainer}
+        initial="hidden"
+        animate="show"
+      >
+        <span className="landing__hero-line">
+          {HEAD_TOP.split(" ").map((w, i) => (
+            <motion.span key={i} className="landing__word" variants={word}>
+              <span>{w}&nbsp;</span>
+            </motion.span>
+          ))}
+        </span>
+        <span className="landing__hero-line">
+          {HEAD_BOT_PRE.split(" ").map((w, i) => (
+            <motion.span
+              key={`a${i}`}
+              className="landing__word"
+              variants={word}
+            >
+              <span>{w}&nbsp;</span>
+            </motion.span>
+          ))}
+          <motion.span className="landing__word" variants={word}>
+            <span className="landing__hero-em">
+              <em>{HEAD_BOT_EM}</em>
+            </span>
+            &nbsp;
+          </motion.span>
+          {HEAD_BOT_POST.split(" ").map((w, i) => (
+            <motion.span
+              key={`b${i}`}
+              className="landing__word"
+              variants={word}
+            >
+              <span>{w}&nbsp;</span>
+            </motion.span>
+          ))}
+        </span>
+      </motion.h1>
+
+      <motion.p
+        className="landing__hero-lede"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.55 }}
+      >
+        Two complementary signals, one ranked answer. Association rules
+        mined from real patient records meet a biomedical retrieval
+        index built from <strong>24,063 NIH passages</strong>. Every
+        diagnosis is auditable through the rule that fired and the
+        passage that grounds it.
+      </motion.p>
+
+      <motion.div
+        className="landing__hero-ctas"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.7 }}
+      >
+        <Link
+          href={authed ? "/app" : "/register"}
+          className="btn landing__btn-primary landing__btn-shine"
+        >
+          {authed ? "Open the diagnostic tool" : "Create a doctor account"}
+          <span className="landing__btn-arrow" aria-hidden>
+            →
+          </span>
+        </Link>
+        <Link
+          href={authed ? "/insights" : "/login"}
+          className="btn landing__btn-ghost"
+        >
+          {authed ? "View insights" : "I already have an account"}
+        </Link>
+      </motion.div>
+
+      <motion.div
+        className="landing__hero-disclaimer"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6, delay: 1.0 }}
+      >
+        Research project, CMPE 255 spring 2026. Not a clinical device,
+        not for use in patient care.
+      </motion.div>
+
+      <motion.div
+        className="landing__scroll-cue"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.3, duration: 0.6 }}
+        aria-hidden
+      >
+        <span className="landing__scroll-text">Scroll</span>
+        <span className="landing__scroll-line" />
+      </motion.div>
+    </section>
+  );
+}
+
+/* =================================================================
+   METRICS
+   ================================================================= */
+
+type Metric = {
+  label: string;
+  value: number;
+  format: (n: number) => string;
+  sub: string;
+};
+
+const METRICS: Metric[] = [
+  {
+    label: "Recall @ 1",
+    value: 0.825,
+    format: (n) => n.toFixed(3),
+    sub: "fused, MiniLM, α = 0.3",
+  },
+  {
+    label: "Recall @ 10",
+    value: 0.89,
+    format: (n) => n.toFixed(3),
+    sub: "+2.0 vs. mining-only",
+  },
+  {
+    label: "MRR",
+    value: 0.857,
+    format: (n) => n.toFixed(3),
+    sub: "200 held-out cases",
+  },
+  {
+    label: "p95 latency",
+    value: 20,
+    format: (n) => `${Math.round(n)} ms`,
+    sub: "M3 Pro, default config",
+  },
+];
+
+function MetricsRow() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const inView = useInView(ref, { once: true, amount: 0.4 });
+  return (
+    <div className="landing__metrics" ref={ref}>
+      {METRICS.map((m, i) => (
+        <MetricCard key={m.label} metric={m} active={inView} index={i} />
+      ))}
+    </div>
+  );
+}
+
+function MetricCard({
+  metric,
+  active,
+  index,
+}: {
+  metric: Metric;
+  active: boolean;
+  index: number;
+}) {
+  const display = useCountUp(active ? metric.value : 0, {
+    durationMs: 1100,
+    delayMs: 80 + index * 80,
+  });
+  return (
+    <motion.div
+      className="landing__metric"
+      initial={{ opacity: 0, y: 14 }}
+      animate={active ? { opacity: 1, y: 0 } : { opacity: 0, y: 14 }}
+      transition={{
+        duration: 0.5,
+        delay: 0.05 + index * 0.06,
+        ease: [0.2, 0.7, 0.2, 1],
+      }}
+      whileHover={{ y: -3 }}
+    >
+      <div className="landing__metric-label">{metric.label}</div>
+      <div className="landing__metric-value">
+        <span className="landing__metric-num">{metric.format(display)}</span>
+      </div>
+      <div className="landing__metric-sub">{metric.sub}</div>
+    </motion.div>
+  );
+}
+
+/* =================================================================
+   HOW IT WORKS (3 features)
+   ================================================================= */
+
+function HowItWorks() {
+  const features = [
+    {
+      num: "01",
+      title: "Mined from records",
+      body: (
+        <>
+          FP-Growth over a 4,920-row, 41-disease patient transaction table
+          yields <strong>23,839 association rules</strong>. At query time
+          we score each rule against the patient&rsquo;s symptom set with
+          overlap-weighted confidence.
+        </>
+      ),
+    },
+    {
+      num: "02",
+      title: "Grounded in literature",
+      body: (
+        <>
+          Dense retrieval over <strong>24,063 MedQuAD passages</strong>{" "}
+          (NIH MedlinePlus, NHLBI, NIDDK, GARD). Three encoder backends:
+          MiniLM 384d, PubMedBERT 768d, Azure OpenAI 3072d. Curated
+          clinical synonym bridge.
+        </>
+      ),
+    },
+    {
+      num: "03",
+      title: "Fused, not stacked",
+      body: (
+        <>
+          <span className="mono">
+            FusedScore(d) = α · RetrievalSim(d) + (1 − α) · MiningConf(d)
+          </span>
+          . Default α = 0.3 sits inside the optimal plateau. Drag the
+          slider live in the app and watch rankings re-fuse.
+        </>
+      ),
+    },
+  ];
+
+  return (
+    <section className="landing__section">
+      <SectionHead
+        eyebrow="How it works"
+        title="Two signals. One ranked differential."
+      />
+      <div className="landing__features">
+        {features.map((f, i) => (
+          <FeatureCard key={f.num} feature={f} index={i} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function FeatureCard({
+  feature,
+  index,
+}: {
+  feature: { num: string; title: string; body: React.ReactNode };
+  index: number;
+}) {
+  const ref = useRef<HTMLElement | null>(null);
+  const inView = useInView(ref, { once: true, amount: 0.35 });
+  return (
+    <motion.article
+      ref={ref}
+      className="landing__feature"
+      initial={{ opacity: 0, y: 24 }}
+      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
+      transition={{
+        duration: 0.55,
+        delay: index * 0.08,
+        ease: [0.2, 0.7, 0.2, 1],
+      }}
+      whileHover={{ y: -4 }}
+    >
+      <div className="landing__feature-glow" aria-hidden />
+      <div className="landing__feature-num">{feature.num}</div>
+      <h3 className="landing__feature-title">{feature.title}</h3>
+      <p className="landing__feature-body">{feature.body}</p>
+    </motion.article>
+  );
+}
+
+/* =================================================================
+   AUDITABLE BY CONSTRUCTION
+   ================================================================= */
+
+type AuditCard = {
+  icon: React.ReactNode;
+  title: string;
+  body: React.ReactNode;
+  hint: string;
+};
+
+function Auditable() {
+  const cards: AuditCard[] = [
+    {
+      icon: <IconHighlight />,
+      title: "Claim-level evidence cards",
+      body: (
+        <>
+          The exact sentence that mentions the symptom or disease is{" "}
+          <span className="landing__hl">highlighted</span>, with character
+          offsets, a source-authority tier, and a passage-type label.
+        </>
+      ),
+      hint: "tier 1 · MedlinePlus, NHLBI, NIDDK",
+    },
+    {
+      icon: <IconStructured />,
+      title: "Structured clinical explanation",
+      body: (
+        <>
+          Four sections per ranked diagnosis: symptom-disease link,
+          statistical prior, evidence quality, what is missing. Citations
+          appended <em>deterministically</em>, so LLM prose stays traceable.
+        </>
+      ),
+      hint: "src/clinical_explanation.py",
+    },
+    {
+      icon: <IconTimeline />,
+      title: "Live pipeline timeline",
+      body: (
+        <>
+          Watch every stage execute. Encode, retrieve, attribute, mine,
+          fuse, evidence, explain. Real per-stage latencies snap in the
+          moment the response lands.
+        </>
+      ),
+      hint: "p50 7.6 ms · p95 19.6 ms",
+    },
+    {
+      icon: <IconLayers />,
+      title: "Two operating modes",
+      body: (
+        <>
+          Offline path: FAISS + template explainer, no keys, 12 ms p50.
+          Production path: Azure OpenAI 3072d on Pinecone Serverless,
+          GPT-5.3 explainer.
+        </>
+      ),
+      hint: "VECTOR_STORE = faiss | pinecone",
+    },
+  ];
+
+  return (
+    <section className="landing__section landing__section--alt">
+      <SectionHead
+        eyebrow="Auditable by construction"
+        title="Every claim cites a passage. Every passage cites a source."
+      />
+      <div className="audit-grid">
+        {cards.map((c, i) => (
+          <AuditCardEl key={c.title} card={c} index={i} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function AuditCardEl({ card, index }: { card: AuditCard; index: number }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const inView = useInView(ref, { once: true, amount: 0.35 });
+  return (
+    <motion.div
+      ref={ref}
+      className="audit-card"
+      initial={{ opacity: 0, y: 18 }}
+      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 18 }}
+      transition={{
+        duration: 0.5,
+        delay: index * 0.07,
+        ease: [0.2, 0.7, 0.2, 1],
+      }}
+      whileHover={{ y: -3 }}
+    >
+      <div className="audit-card__icon" aria-hidden>
+        {card.icon}
+      </div>
+      <h3 className="audit-card__title">{card.title}</h3>
+      <p className="audit-card__body">{card.body}</p>
+      <div className="audit-card__hint">
+        <span className="audit-card__hint-dot" aria-hidden />
+        <span>{card.hint}</span>
+      </div>
+    </motion.div>
+  );
+}
+
+/* Small, monoline SVG icons for the audit cards. ~18 px, currentColor. */
+
+function IconHighlight() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M5 8h14" />
+      <rect x="5" y="11" width="9" height="3" rx="0.5" fill="currentColor" stroke="none" opacity="0.18" />
+      <path d="M5 11h9" />
+      <path d="M5 14h14" />
+      <path d="M5 17h10" />
+    </svg>
+  );
+}
+
+function IconStructured() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="4" y="4" width="7" height="7" rx="1.2" />
+      <rect x="13" y="4" width="7" height="7" rx="1.2" />
+      <rect x="4" y="13" width="7" height="7" rx="1.2" />
+      <rect x="13" y="13" width="7" height="7" rx="1.2" />
+    </svg>
+  );
+}
+
+function IconTimeline() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="6" cy="12" r="2" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="2" />
+      <circle cx="18" cy="12" r="2" />
+      <path d="M8 12h2" />
+      <path d="M14 12h2" />
+    </svg>
+  );
+}
+
+function IconLayers() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 4l8 4-8 4-8-4 8-4z" />
+      <path d="M4 12l8 4 8-4" />
+      <path d="M4 16l8 4 8-4" />
+    </svg>
+  );
+}
+
+/* =================================================================
+   FINAL CTA
+   ================================================================= */
+
+function FinalCta({ authed }: { authed: boolean }) {
+  const ref = useRef<HTMLElement | null>(null);
+  const inView = useInView(ref, { once: true, amount: 0.4 });
+  return (
+    <motion.section
+      ref={ref}
+      className="landing__cta"
+      initial={{ opacity: 0, y: 20 }}
+      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+      transition={{ duration: 0.55, ease: [0.2, 0.7, 0.2, 1] }}
+    >
+      <div className="landing__cta-inner">
+        <h2 className="landing__cta-title">
+          Sign in and try the cardiac event preset.
+        </h2>
+        <p className="landing__cta-body">
+          The fastest way to understand the system is to run it. Pick the
+          preset, watch Heart Attack rank #1 with fused score 0.831, and
+          drag the α slider to see the lift collapse without mining.
+        </p>
+        <div className="landing__hero-ctas">
+          {authed ? (
+            <Link
+              href="/app"
+              className="btn landing__btn-primary landing__btn-shine"
+            >
+              Open the app
+              <span className="landing__btn-arrow" aria-hidden>
+                →
+              </span>
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/register"
+                className="btn landing__btn-primary landing__btn-shine"
+              >
+                Create account
+                <span className="landing__btn-arrow" aria-hidden>
+                  →
+                </span>
+              </Link>
+              <Link href="/login" className="btn landing__btn-ghost">
+                Sign in
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
+    </motion.section>
+  );
+}
+
+/* =================================================================
+   FOOTER
+   ================================================================= */
+
+function LandingFooter() {
+  return (
+    <footer className="landing__footer">
+      <div className="landing__footer-row">
+        <div className="landing__footer-brand">
           <div className="topbar__logo">R</div>
           <div>
-            <div className="topbar__title">
+            <div className="landing__footer-title">
               Record-Based Medical Diagnostic Assistant
             </div>
-            <div className="topbar__sub">
-              CMPE 255, San José State University
+            <div className="landing__footer-sub">
+              Final project, CMPE 255 Data Mining, spring 2026
             </div>
           </div>
         </div>
-        <nav className="topbar__nav">
-          <Link
-            href="/"
-            className="topbar__navlink topbar__navlink--active"
-          >
-            Diagnose
-          </Link>
-          <Link href="/insights" className="topbar__navlink">
-            Insights
-          </Link>
-        </nav>
-        <div className="topbar__spacer" />
-        <span className="status">
-          <span className="dot" />
-          <span className="mono">{statusVS}</span>
-          <span style={{ color: "var(--ink-4)" }}>, </span>
-          <span className="mono">{statusBackend}</span>
-          <span style={{ color: "var(--ink-4)" }}>, </span>
-          <span className="mono">{statusExp}</span>
-        </span>
-        <span className="topbar__authors">
-          <strong>Sakshat Patil</strong>, <strong>Vineet Kumar</strong> , {" "}
-          <strong>Aishwarya Madhave</strong>
-        </span>
-        <button
-          className="icon-btn"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          title="Toggle theme"
-          aria-label="Toggle theme"
-        >
-          <Icon name={theme === "dark" ? "sun" : "moon"} size={14} />
-        </button>
-      </header>
-
-      <div className="shell">
-        <aside className="rail">
-          <SymptomPicker
-            available={allSymptoms}
-            selected={symptoms}
-            onChange={setSymptoms}
-          />
-          <Controls
-            config={config}
-            sources={sources}
-            backend={backend}
-            mode={mode}
-            alpha={alpha}
-            expandSyn={expandSyn}
-            crossEncoder={crossEncoder}
-            explainer={explainer}
-            sourceFilter={sourceFilter}
-            passageTypeFilter={passageTypeFilter}
-            topKRetrieval={topKRetrieval}
-            relatedTopK={relatedTopK}
-            maxEvidenceCards={maxEvidenceCards}
-            compareMode={compareMode}
-            onChange={(p) => {
-              if (p.backend !== undefined) setBackend(p.backend);
-              if (p.mode !== undefined) setMode(p.mode);
-              if (p.alpha !== undefined) setAlpha(p.alpha);
-              if (p.expandSyn !== undefined) setExpandSyn(p.expandSyn);
-              if (p.crossEncoder !== undefined) setCrossEncoder(p.crossEncoder);
-              if (p.explainer !== undefined) setExplainer(p.explainer);
-              if (p.sourceFilter !== undefined) setSourceFilter(p.sourceFilter);
-              if (p.passageTypeFilter !== undefined)
-                setPassageTypeFilter(p.passageTypeFilter);
-              if (p.topKRetrieval !== undefined)
-                setTopKRetrieval(p.topKRetrieval);
-              if (p.relatedTopK !== undefined) setRelatedTopK(p.relatedTopK);
-              if (p.maxEvidenceCards !== undefined)
-                setMaxEvidenceCards(p.maxEvidenceCards);
-              if (p.compareMode !== undefined) setCompareMode(p.compareMode);
-            }}
-          />
-          <div style={{ flex: 1 }} />
-          <button
-            className="btn btn--primary"
-            onClick={runDiagnose}
-            disabled={loading || !symptoms.length}
-          >
-            {loading
-              ? "Diagnosing…"
-              : symptoms.length === 0
-              ? "Add a symptom to diagnose"
-              : `Diagnose, ${symptoms.length} symptom${symptoms.length === 1 ? "" : "s"}`}
-          </button>
-          {error && <div className="error-banner">{error}</div>}
-        </aside>
-
-        <main className="main">
-          {/* Empty state */}
-          {(heroExiting || (!loading && !resp && !error)) && (
-            <EmptyState
-              hasSymptoms={symptoms.length > 0}
-              symptomCount={symptoms.length}
-              onTry={runDiagnose}
-              exiting={heroExiting}
-            />
-          )}
-
-          {/* Single-lane mode (default) */}
-          {!compareMode && (loading || resp) && (
-            <>
-              <PipelineTimeline
-                state={loading ? "running" : "done"}
-                symptomCount={symptoms.length}
-                backend={resp?.used_backend ?? backend}
-                vectorStore={
-                  resp?.vector_store ?? config?.vector_store ?? "faiss"
-                }
-                explainer={resp?.explainer_backend ?? explainer}
-                alpha={resp?.used_alpha ?? alpha}
-                mode={resp?.used_mode ?? mode}
-                trace={
-                  streamStages.length > 0
-                    ? streamStages
-                    : resp?.pipeline_trace ?? []
-                }
-                insights={insights}
-                streaming={loading}
-              />
-              {loading && <SkeletonResults />}
-              {!loading && resp && (
-                <>
-                  <LatencyStrip
-                    latency={resp.latency_ms}
-                    vectorStore={resp.vector_store}
-                    explainer={resp.explainer_backend}
-                    alpha={resp.used_alpha}
-                    mode={resp.used_mode}
-                    backend={resp.used_backend}
-                  />
-                  <DifferentialSummary
-                    symptoms={resp.query_symptoms}
-                    diagnoses={resp.diagnoses.map((d) => ({
-                      disease: d.disease,
-                      fused_score: d.fused_score,
-                      mining_score: d.mining_score,
-                      retrieval_score: d.retrieval_score,
-                    }))}
-                    alpha={resp.used_alpha}
-                    mode={resp.used_mode}
-                  />
-                  <h3 className="h-section" style={{ marginTop: 4 }}>
-                    Ranked diagnoses
-                    <span>
-                      top {resp.diagnoses.length}, α{" "}
-                      {resp.used_alpha.toFixed(2)}, mode {resp.used_mode}
-                    </span>
-                  </h3>
-                  {resp.diagnoses.map((d, i) => (
-                    <DiagnosisCard
-                      key={d.disease}
-                      rank={i + 1}
-                      diag={d}
-                      maxScore={maxScore}
-                    />
-                  ))}
-                  <RelatedContextPanel items={resp.related_context} />
-                </>
-              )}
-            </>
-          )}
-
-          {/* Compare mode, two lanes side by side */}
-          {compareMode && (loading || loadingB || resp || respB) && (
-            <>
-              <h3 className="h-section" style={{ marginTop: 0 }}>
-                Side-by-side compare
-                <span>
-                  azure-openai, 3072d  vs.  pubmedbert, 768d
-                </span>
-              </h3>
-              <div className="compare-grid">
-                <CompareLane
-                  title="azure-openai, 3072d Pinecone"
-                  loading={loading}
-                  resp={resp}
-                  streamStages={streamStages}
-                  symptoms={symptoms}
-                  alpha={alpha}
-                  mode={mode}
-                  fallbackBackend="azure-openai"
-                  fallbackVectorStore={config?.vector_store ?? "pinecone"}
-                  fallbackExplainer={explainer}
-                  insights={insights}
-                  error={error}
-                />
-                <CompareLane
-                  title="pubmedbert, 768d Pinecone"
-                  loading={loadingB}
-                  resp={respB}
-                  streamStages={streamStagesB}
-                  symptoms={symptoms}
-                  alpha={alpha}
-                  mode={mode}
-                  fallbackBackend="pubmedbert"
-                  fallbackVectorStore={config?.vector_store ?? "pinecone"}
-                  fallbackExplainer={explainer}
-                  insights={insights}
-                  error={errorB}
-                />
-              </div>
-            </>
-          )}
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// One column of the side-by-side compare layout. Reuses the same
-// PipelineTimeline + DiagnosisCard components that single-lane mode
-// renders, just inside a narrower grid cell.
-function CompareLane(props: {
-  title: string;
-  loading: boolean;
-  resp: DiagnoseResponse | null;
-  streamStages: PipelineStage[];
-  symptoms: string[];
-  alpha: number;
-  mode: string;
-  fallbackBackend: string;
-  fallbackVectorStore: string;
-  fallbackExplainer: string;
-  insights: InsightsResponse | null;
-  error: string | null;
-}) {
-  const {
-    title,
-    loading,
-    resp,
-    streamStages,
-    symptoms,
-    alpha,
-    mode,
-    fallbackBackend,
-    fallbackVectorStore,
-    fallbackExplainer,
-    insights,
-    error,
-  } = props;
-  const maxScore = resp
-    ? Math.max(...resp.diagnoses.map((d) => d.fused_score), 0.001)
-    : 1;
-  return (
-    <div className="compare-lane">
-      <div className="compare-lane__head">
-        <h4 className="compare-lane__title">{title}</h4>
-        {resp && (
-          <span className="pill pill--mono">
-            top: {resp.diagnoses[0]?.disease.replace(/_/g, " ")} , {" "}
-            {resp.diagnoses[0]?.fused_score.toFixed(3)}
-          </span>
-        )}
-      </div>
-      {error && <div className="error-banner">{error}</div>}
-      {(loading || resp) && (
-        <PipelineTimeline
-          state={loading ? "running" : "done"}
-          symptomCount={symptoms.length}
-          backend={resp?.used_backend ?? fallbackBackend}
-          vectorStore={resp?.vector_store ?? fallbackVectorStore}
-          explainer={resp?.explainer_backend ?? fallbackExplainer}
-          alpha={resp?.used_alpha ?? alpha}
-          mode={resp?.used_mode ?? mode}
-          trace={
-            streamStages.length > 0
-              ? streamStages
-              : resp?.pipeline_trace ?? []
-          }
-          insights={insights}
-          streaming={loading}
-        />
-      )}
-      {!loading && resp && (
-        <>
-          <h5 className="compare-lane__section">
-            Ranked diagnoses
-            <span>top {resp.diagnoses.length}</span>
-          </h5>
-          {resp.diagnoses.slice(0, 3).map((d, i) => (
-            <DiagnosisCard
-              key={d.disease}
-              rank={i + 1}
-              diag={d}
-              maxScore={maxScore}
-            />
-          ))}
-        </>
-      )}
-    </div>
-  );
-}
-
-function SkeletonResults() {
-  return (
-    <>
-      <div className="skel" style={{ height: 36, marginBottom: 16 }} />
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="card skel-card">
-          <div style={{ display: "flex", gap: 14 }}>
-            <div className="skel" style={{ width: 36, height: 24 }} />
-            <div style={{ flex: 1 }}>
-              <div className="skel" style={{ width: "55%", height: 18, marginBottom: 8 }} />
-              <div className="skel" style={{ width: "75%", height: 8 }} />
-            </div>
+        <div className="landing__footer-meta">
+          <div>Sakshat Patil · Vineet Kumar · Aishwarya Madhave</div>
+          <div className="landing__footer-sub">
+            San Jose State University, Department of Computer Engineering
           </div>
-          <div className="skel" style={{ height: 110, marginTop: 14 }} />
-          <div className="skel" style={{ height: 60, marginTop: 10 }} />
         </div>
-      ))}
-    </>
+      </div>
+      <div className="landing__footer-fineprint">
+        Research project. Numbers shown reflect 200 synthetic test cases,
+        not a clinical evaluation. Not for use in patient care.
+      </div>
+    </footer>
   );
 }
 
-function EmptyState({
-  hasSymptoms,
-  symptomCount,
-  onTry,
-  exiting,
+/* =================================================================
+   SHARED PIECES
+   ================================================================= */
+
+function SectionHead({
+  eyebrow,
+  title,
 }: {
-  hasSymptoms: boolean;
-  symptomCount: number;
-  onTry: () => void;
-  exiting?: boolean;
+  eyebrow: string;
+  title: string;
 }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const inView = useInView(ref, { once: true, amount: 0.5 });
   return (
-    <div className="empty" data-exit={exiting ? "true" : "false"}>
-      <div className="empty__crumbs">
-        <span className="dot" />
-        <span>{symptomCount} / 15 symptoms</span>
-        <span className="empty__crumb-sep">, </span>
-        <span>131 vector tokens</span>
-        <span className="empty__crumb-sep">, </span>
-        <span>23,839 mined rules</span>
-      </div>
-      <h1 className="empty__title">
-        What is the patient <em>presenting&nbsp;with?</em>
-      </h1>
-      <p className="empty__lede">
-        A symptom-first differential. Add what you observe in the rail , 
-        the system ranks likely diagnoses against{" "}
-        <strong>24,063 mined biomedical passages</strong> and{" "}
-        <strong>23,839 association rules</strong>, then explains its
-        reasoning with claim-level evidence.
-      </p>
-      <button
-        className="empty__cta"
-        onClick={onTry}
-        disabled={!hasSymptoms}
-      >
-        {hasSymptoms
-          ? `Run differential, ${symptomCount} symptom${symptomCount === 1 ? "" : "s"}`
-          : "Add at least one symptom to begin"}
-        <span aria-hidden>to</span>
-      </button>
-      {!hasSymptoms && (
-        <span className="empty__hint">
-          Try the <em style={{ fontFamily: "var(--serif)", color: "var(--ink-2)" }}>Cardiac event</em> preset on the left to see a worked example.
-        </span>
-      )}
-    </div>
+    <motion.div
+      ref={ref}
+      className="landing__section-head"
+      initial={{ opacity: 0, y: 14 }}
+      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 14 }}
+      transition={{ duration: 0.5 }}
+    >
+      <div className="landing__section-eyebrow">{eyebrow}</div>
+      <h2 className="landing__section-title">{title}</h2>
+    </motion.div>
   );
+}
+
+/* =================================================================
+   useCountUp: gentle ease-out tween from 0 to target.
+   Used by metric cards once they enter the viewport.
+   ================================================================= */
+
+function useCountUp(
+  target: number,
+  opts: { durationMs?: number; delayMs?: number } = {},
+): number {
+  const { durationMs = 900, delayMs = 0 } = opts;
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    if (target === 0) {
+      setValue(0);
+      return;
+    }
+    let raf = 0;
+    let start = 0;
+    const t0 = performance.now() + delayMs;
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+    const tick = (now: number) => {
+      if (now < t0) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+      if (!start) start = now;
+      const elapsed = now - t0;
+      const t = Math.min(1, elapsed / durationMs);
+      setValue(target * easeOutCubic(t));
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, durationMs, delayMs]);
+
+  return value;
 }
