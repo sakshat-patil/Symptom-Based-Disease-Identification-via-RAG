@@ -243,6 +243,25 @@ being selectable in the first place.
 
 ---
 
+## Routes and authentication
+
+The web client ships a small mock auth flow so doctors can register, sign in, and keep a per-account record of recent diagnoses.
+
+| Route | Public? | What it is |
+| --- | --- | --- |
+| `/` | yes | Landing page (hero, headline metrics, how-it-works, auditable-by-construction grid, CTA) |
+| `/login` | yes | Sign in (redirects authed users to `/app`) |
+| `/register` | yes | Doctor registration: name, email, specialty, hospital/clinic, NPI, years of experience, bio |
+| `/app` | auth-gated | The diagnostic tool (formerly at `/`) |
+| `/insights` | auth-gated | Aggregates dashboard (alpha sweep, ablation, rule counts, latency) |
+| `/profile` | auth-gated | Doctor profile (editable details + last 25 diagnoses) |
+
+Auth is intentionally a **localStorage mock**. Passwords are SHA-256 hashed via `window.crypto.subtle` and never leave the browser. This is enough to demo a real-feeling UX without claiming security guarantees we can't defend in Q&A. Real auth would move this to the FastAPI service with httpOnly cookies, which is a half-day's work.
+
+The four LLM-flavoured features (chip explain, differential summary, structured explanation, OpenAI explainer) all fall back to deterministic templates if `OPENAI_API_KEY` isn't set, so the demo stays reproducible offline regardless of which account is signed in.
+
+---
+
 ## What the UI actually does
 
 The empty state is a calm prompt that explains the system and points you at the presets:
@@ -293,7 +312,14 @@ A few things we tried that we didn't ship in the headline numbers, in case the g
 code/
 ├── service/api.py                  FastAPI inference microservice
 ├── web/                            Next.js 14 frontend
-│   ├── app/                          App Router pages + components
+│   ├── app/                          App Router
+│   │   ├── page.tsx                    landing (public)
+│   │   ├── login/, register/           doctor sign-in and sign-up
+│   │   ├── app/                        diagnostic tool (auth-gated)
+│   │   ├── insights/                   aggregates dashboard (auth-gated)
+│   │   ├── profile/                    doctor profile + history (auth-gated)
+│   │   ├── components/                 UI components + AuthProvider/AuthGuard/UserMenu
+│   │   └── lib/auth.ts                 localStorage-backed mock auth
 │   └── package.json
 ├── src/                            Python AI/data layer
 │   ├── etl.py                       Kaggle CSV to transactions.csv
