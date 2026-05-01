@@ -17,10 +17,20 @@ import {
 import Link from "next/link";
 import { api, InsightsResponse } from "../api";
 import { Icon } from "../components/Icon";
+import { AuthGuard } from "../components/AuthGuard";
+import { UserMenu } from "../components/UserMenu";
 
 const TIER_COLORS = ["#2f7a4f", "#b88500", "#94a3b8"]; // tier 1 / 2 / 3
 
 export default function InsightsPage() {
+  return (
+    <AuthGuard>
+      <InsightsContent />
+    </AuthGuard>
+  );
+}
+
+function InsightsContent() {
   const [data, setData] = useState<InsightsResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -52,12 +62,12 @@ export default function InsightsPage() {
               Record-Based Medical Diagnostic Assistant
             </div>
             <div className="topbar__sub">
-              CMPE 255, San José State University
+              CMPE 255, San Jose State University
             </div>
           </div>
         </div>
         <nav className="topbar__nav">
-          <Link href="/" className="topbar__navlink">
+          <Link href="/app" className="topbar__navlink">
             Diagnose
           </Link>
           <Link
@@ -65,6 +75,9 @@ export default function InsightsPage() {
             className="topbar__navlink topbar__navlink--active"
           >
             Insights
+          </Link>
+          <Link href="/profile" className="topbar__navlink">
+            Profile
           </Link>
         </nav>
         <div className="topbar__spacer" />
@@ -82,6 +95,7 @@ export default function InsightsPage() {
         >
           <Icon name={theme === "dark" ? "sun" : "moon"} size={14} />
         </button>
+        <UserMenu />
       </header>
 
       <main className="insights">
